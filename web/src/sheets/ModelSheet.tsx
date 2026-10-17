@@ -11,9 +11,9 @@ export const EFFORT_LABELS: Record<EffortLevel, string> = {
   max: '最大',
 }
 
-const EFFORT_ORDER: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
+export const EFFORT_ORDER: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-interface Props {
+export interface ModelPickerProps {
   models: ModelOption[]
   providers: ProviderInfo[]
   provider: Provider
@@ -30,7 +30,7 @@ export function isCurrent(m: ModelOption, provider: Provider, model: string) {
   return m.provider === provider && (m.value === model || (!!m.resolved && m.resolved === model))
 }
 
-export function ModelSheet(p: Props) {
+export function ModelSheet(p: ModelPickerProps) {
   const [tab, setTab] = useState<Provider>(p.provider)
   const [view, setView] = useState<'main' | 'effort' | 'more' | 'classifier'>('main')
   const available = p.providers.filter((pv) => p.models.some((m) => m.provider === pv.id))

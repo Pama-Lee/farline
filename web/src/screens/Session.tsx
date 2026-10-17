@@ -17,6 +17,7 @@ import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { DirPicker } from '../sheets/DeviceSheet.tsx'
 import { ContextSheet } from '../sheets/ContextSheet.tsx'
 import { EFFORT_LABELS, ModelSheet, isCurrent } from '../sheets/ModelSheet.tsx'
+import { ModelMenu, wantsMenuPicker } from '../sheets/ModelMenu.tsx'
 import { StepsSheet } from '../sheets/StepsSheet.tsx'
 import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
 import { collectTasks, type TaskView } from '../lib/tasks.ts'
@@ -699,6 +700,7 @@ function Composer(p: {
   const [text, setText] = useState(() => sessionStorage.getItem(storeKey) ?? '')
   const [atts, setAtts] = useState<Attachment[]>([])
   const [sheet, setSheet] = useState<'context' | 'model' | null>(null)
+  const [menuAt, setMenuAt] = useState<DOMRect | null>(null)
   const [sending, setSending] = useState(false)
   const ta = useRef<HTMLTextAreaElement>(null)
   const dictation = useDictation((t) => setText((cur) => (cur ? `${cur}${t}` : t)))
@@ -805,7 +807,14 @@ function Composer(p: {
         <button className="round" onClick={() => setSheet('context')} aria-label="添加">
           <Plus size={21} strokeWidth={1.8} />
         </button>
-        <button className="model-pill" onClick={() => setSheet('model')}>
+        <button
+          className="model-pill"
+          onClick={(e) => {
+            // Some skins want a menu at the button instead of a sheet.
+            if (wantsMenuPicker()) setMenuAt(e.currentTarget.getBoundingClientRect())
+            else setSheet('model')
+          }}
+        >
           {p.modelLabel}
           {p.effort && <span className="eff">{EFFORT_LABELS[p.effort]}</span>}
         </button>
@@ -824,6 +833,21 @@ function Composer(p: {
         )}
       </div>
       {sheet === 'context' && <ContextSheet sessionId={p.sessionId} mode={p.mode} onFiles={addFiles} onMode={p.onMode} onClose={() => setSheet(null)} />}
+      {menuAt && (
+        <ModelMenu
+          anchor={menuAt}
+          models={p.models}
+          providers={p.providers}
+          provider={p.provider}
+          model={p.model}
+          effort={p.effort}
+          classifierModel={p.classifierModel}
+          onModel={p.onModel}
+          onEffort={p.onEffort}
+          onClassifier={p.onClassifier}
+          onClose={() => setMenuAt(null)}
+        />
+      )}
       {sheet === 'model' && (
         <ModelSheet
           models={p.models}

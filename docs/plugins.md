@@ -260,6 +260,14 @@ npx esbuild src/web.tsx --bundle --format=esm --jsx=automatic --external:react -
 
 同时只能启用一个皮肤，启用一个会自动停用别的。皮肤也可以同时带 `server` / `web` 入口。
 
+有些地方的结构由皮肤用 CSS 变量选择，写在 `:root` 里：
+
+| 变量 | 取值 | |
+| --- | --- | --- |
+| `--fl-model-picker` | `menu` | 模型选择改成模型按钮旁的弹出菜单（思考强度、模型分两级），默认是底部弹层 |
+
+弹出菜单的样式类是 `.popover`、`.menu`、`.menu-row`、`.menu-sep`、`.menu-head`、`.menu-tabs`。
+
 ## 内置插件
 
 | id | 名称 | 默认 | |

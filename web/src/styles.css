@@ -2536,3 +2536,98 @@ a.option {
   font-size: 12.5px;
   color: var(--text-3);
 }
+
+/* ---------- popover menus (skins can ask for them) ---------- */
+
+.popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.popover {
+  position: fixed;
+  z-index: 71;
+  min-width: 230px;
+  max-width: calc(100vw - 20px);
+  max-height: min(420px, calc(var(--app-h) - 40px));
+  overflow-y: auto;
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px var(--line), 0 12px 36px rgba(0, 0, 0, 0.16);
+  animation: fade-in 0.12s ease;
+}
+
+.menu {
+  padding: 4px 0;
+}
+
+.menu-row,
+.menu-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  text-align: left;
+  font-size: 14px;
+}
+
+.menu-row:hover,
+.menu-head:hover {
+  background: var(--row-fill);
+}
+
+.menu-row .grow {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-row .v {
+  color: var(--text-2);
+}
+
+.menu-chev {
+  flex: none;
+  color: var(--text-2);
+}
+
+.menu-check {
+  flex: none;
+  color: var(--text);
+}
+
+.menu-head {
+  gap: 4px;
+  padding-left: 8px;
+  color: var(--text-2);
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--line);
+}
+
+.menu-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px 6px;
+}
+
+.menu-tabs button {
+  flex: 1;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.menu-tabs button.on {
+  background: var(--fill);
+  color: var(--text);
+}

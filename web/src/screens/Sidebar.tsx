@@ -1,5 +1,5 @@
 // Desktop: the session list lives in a fixed left column next to the thread.
-import { Clock, Laptop, Plus, Search, Settings2, SlidersVertical, X } from 'lucide-react'
+import { Clock, Laptop, PanelLeftClose, Plus, Search, Settings2, SlidersVertical, X } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Spinner, StatusGlyph } from '../components/bits.tsx'
 import type { DeviceInfo } from '../lib/api.ts'
@@ -10,7 +10,7 @@ import { DeviceSheet } from '../sheets/DeviceSheet.tsx'
 import { FilterSheet, HistorySheet } from '../sheets/ListSheets.tsx'
 import { SettingsSheet } from '../sheets/SettingsSheet.tsx'
 
-export function Sidebar({ device, activeId, onLogout }: { device: DeviceInfo | null; activeId: string | null; onLogout: () => void }) {
+export function Sidebar({ device, activeId, onLogout, onHide }: { device: DeviceInfo | null; activeId: string | null; onLogout: () => void; onHide: () => void }) {
   const { sessions, nextOffset, loading, loadMore } = useSessions()
   const [sheet, setSheet] = useState<'device' | 'settings' | 'filter' | 'history' | null>(null)
   const [filter, setFilter] = useState<string | null>(() => localStorage.getItem('farline.filter'))
@@ -34,6 +34,9 @@ export function Sidebar({ device, activeId, onLogout }: { device: DeviceInfo | n
           </button>
           <button onClick={() => setSheet('settings')} aria-label="设置" title="设置">
             <Settings2 size={18} strokeWidth={1.7} />
+          </button>
+          <button onClick={onHide} aria-label="收起侧栏" title="收起侧栏 (⌘B)">
+            <PanelLeftClose size={18} strokeWidth={1.7} />
           </button>
         </div>
       </div>

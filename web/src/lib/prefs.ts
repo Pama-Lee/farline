@@ -38,3 +38,25 @@ export function useInlineSteps() {
   const desktop = useDesktop()
   return v === 'inline' || (v === 'auto' && desktop)
 }
+
+// The desktop sidebar: hidden or not, and how wide.
+const SB_W = 'farline.sbWidth'
+const SB_HIDDEN = 'farline.sbHidden'
+export const SB_MIN = 220
+export const SB_MAX = 520
+
+export function useSidebarLayout() {
+  const [width, setWidthState] = useState<number | null>(() => Number(localStorage.getItem(SB_W)) || null)
+  const [hidden, setHiddenState] = useState(() => localStorage.getItem(SB_HIDDEN) === '1')
+  const setWidth = (w: number | null) => {
+    setWidthState(w)
+    if (w) localStorage.setItem(SB_W, String(Math.round(w)))
+    else localStorage.removeItem(SB_W)
+  }
+  const setHidden = (h: boolean) => {
+    setHiddenState(h)
+    if (h) localStorage.setItem(SB_HIDDEN, '1')
+    else localStorage.removeItem(SB_HIDDEN)
+  }
+  return { width, hidden, setWidth, setHidden }
+}

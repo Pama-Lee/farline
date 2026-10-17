@@ -13,6 +13,9 @@ import { Home } from './screens/Home.tsx'
 import { Login } from './screens/Login.tsx'
 import { SessionScreen } from './screens/Session.tsx'
 import { Sidebar } from './screens/Sidebar.tsx'
+import { SidebarResizer } from './components/SidebarResizer.tsx'
+import { useSidebarLayout } from './lib/prefs.ts'
+import { PanelLeftOpen } from 'lucide-react'
 
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null)
@@ -22,6 +25,20 @@ export function App() {
   const desktop = useDesktop()
   const viewer = useViewer()
   const files = useFiles()
+  const sb = useSidebarLayout()
+
+  // Cmd/Ctrl+B shows or hides the sidebar.
+  useEffect(() => {
+    if (!desktop) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        sb.setHidden(!sb.hidden)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [desktop, sb])
 
   // Viewers belong to the thread they were opened from.
   const routeKey = route.name === 'session' ? route.id : route.name
@@ -86,9 +103,24 @@ export function App() {
         <SessionScreen key={`new:${route.name === 'new' ? route.cwd : ''}`} id={null} newCwd={route.name === 'new' ? route.cwd || undefined : undefined} device={device} catalog={catalog} />
       )
     body = (
-      <div className={`desktop${viewer ? ' with-panel' : ''}${files ? ' with-files' : ''}`}>
-        {files ? <FilePanel desktop /> : <Sidebar device={device} activeId={route.name === 'session' ? route.id : null} onLogout={() => setAuthed(false)} />}
-        <main className="main-pane">{main}</main>
+      <div
+        className={`desktop${viewer ? ' with-panel' : ''}${files ? ' with-files' : ''}${sb.hidden && !files ? ' sb-hidden' : ''}`}
+        style={sb.width ? ({ '--sb-w': `${sb.width}px` } as React.CSSProperties) : undefined}
+      >
+        {files ? (
+          <FilePanel desktop />
+        ) : (
+          !sb.hidden && <Sidebar device={device} activeId={route.name === 'session' ? route.id : null} onLogout={() => setAuthed(false)} onHide={() => sb.setHidden(true)} />
+        )}
+        <main className="main-pane">
+          {main}
+          {sb.hidden && !files && (
+            <button className="sb-show" onClick={() => sb.setHidden(false)} aria-label="显示侧栏" title="显示侧栏 (⌘B)">
+              <PanelLeftOpen size={19} strokeWidth={1.7} />
+            </button>
+          )}
+        </main>
+        {!files && !sb.hidden && <SidebarResizer onWidth={sb.setWidth} onHide={() => sb.setHidden(true)} />}
       </div>
     )
   } else if (route.name === 'session') body = <SessionScreen key={route.id} id={route.id} device={device} catalog={catalog} />

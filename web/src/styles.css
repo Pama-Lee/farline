@@ -2869,3 +2869,82 @@ a.option {
   max-height: 240px;
   width: auto;
 }
+
+/* rewriting a reply */
+
+.reply-editor textarea {
+  display: block;
+  width: 100%;
+  resize: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 15.5px;
+  line-height: 1.6;
+  outline: none;
+  max-height: 70vh;
+}
+
+.reply-editor textarea:focus {
+  border-color: var(--text-3);
+}
+
+.re-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.re-btn {
+  height: 32px;
+  min-width: 60px;
+  padding: 0 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  background: var(--fill);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+
+.re-btn.primary {
+  background: var(--black);
+  color: #fff;
+}
+
+.re-btn:disabled {
+  opacity: 0.5;
+}
+
+.edited-tag {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.sel-menu {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--black);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+
+.sel-menu button {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  color: #fff;
+  font-size: 13.5px;
+}
+
+.sel-menu button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}

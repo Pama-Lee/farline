@@ -20,6 +20,8 @@ import { EFFORT_LABELS, ModelSheet, isCurrent } from '../sheets/ModelSheet.tsx'
 import { ModelMenu, wantsMenuPicker } from '../sheets/ModelMenu.tsx'
 import { InlineSteps, StepsSheet } from '../sheets/StepsSheet.tsx'
 import { DRAFT_EVENT, RewindSheet } from '../sheets/RewindSheet.tsx'
+import { ReplyEditor } from '../components/ReplyEditor.tsx'
+import { SelectionMenu } from '../components/SelectionMenu.tsx'
 import { useInlineSteps } from '../lib/prefs.ts'
 import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
 import { collectTasks, type TaskView } from '../lib/tasks.ts'
@@ -52,6 +54,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const [steps, setSteps] = useState<StepItem[] | null>(null)
   const [stepsId, setStepsId] = useState<string | null>(null)
   const [rewindAt, setRewindAt] = useState<{ id: string; text: string } | null>(null)
+  const [editing, setEditing] = useState<{ id: string; select?: string } | null>(null)
   const [menu, setMenu] = useState(false)
   // Background tasks sheet, optionally opened on one task.
   const [taskSheet, setTaskSheet] = useState<{ openId: string | null } | null>(null)
@@ -206,13 +209,24 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                     }
                   />
                 )
-              if (b.type === 'text')
+              if (b.type === 'text') {
+                if (id && editing?.id === b.item.id)
+                  return (
+                    <div className="msg-text" key={b.item.id}>
+                      <ReplyEditor sessionId={id} itemId={b.item.id} text={b.item.text} select={editing.select} onDone={() => setEditing(null)} />
+                    </div>
+                  )
+                const editable = !!id && !busy && !b.item.streaming
                 return (
-                  <div className="msg-text" key={b.item.id}>
+                  <div className="msg-text" key={b.item.id} data-item={editable ? b.item.id : undefined}>
                     <Markdown text={b.item.text} />
-                    {b.last && !b.item.streaming && !(busy && i === blocks.length - 1) && <MsgActions text={b.item.text} />}
+                    {b.item.edited && <div className="edited-tag">已编辑</div>}
+                    {b.last && !b.item.streaming && !(busy && i === blocks.length - 1) && (
+                      <MsgActions text={b.item.text} onEdit={editable ? () => setEditing({ id: b.item.id }) : undefined} />
+                    )}
                   </div>
                 )
+              }
               if (b.type === 'steps')
                 return (
                   <StepsRow
@@ -324,6 +338,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
             }}
           />
         )}
+        <SelectionMenu enabled={!!id && !busy && !editing} onEdit={(itemId, select) => setEditing({ id: itemId, select })} />
         {rewindAt && id && state && <RewindSheet sessionId={id} cwd={state.cwd} messageId={rewindAt.id} text={rewindAt.text} onClose={() => setRewindAt(null)} />}
         {taskSheet && id && <TasksSheet sessionId={id} tasks={tasks} live={!!state?.live} openId={taskSheet.openId} onClose={() => setTaskSheet(null)} />}
         {menu && id && state && (
@@ -507,7 +522,7 @@ function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; on
   )
 }
 
-function MsgActions({ text }: { text: string }) {
+function MsgActions({ text, onEdit }: { text: string; onEdit?: () => void }) {
   const [speaking, setSpeaking] = useState(false)
   const speak = () => {
     const synth = window.speechSynthesis
@@ -538,6 +553,11 @@ function MsgActions({ text }: { text: string }) {
       <button onClick={speak} aria-label="朗读">
         {speaking ? <Square size={17} strokeWidth={1.7} /> : <Play size={17} strokeWidth={1.6} />}
       </button>
+      {onEdit && (
+        <button onClick={onEdit} aria-label="编辑" title="编辑">
+          <PencilLine size={17} strokeWidth={1.6} />
+        </button>
+      )}
     </div>
   )
 }

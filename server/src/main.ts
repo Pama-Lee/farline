@@ -363,6 +363,19 @@ api.post('/sessions/:id/rewind', async (c) => {
   }
 })
 
+api.put('/sessions/:id/items/:itemId/text', async (c) => {
+  const { text } = await c.req.json<{ text?: unknown }>().catch(() => ({ text: undefined }))
+  const view = await openView(c.req.param('id'))
+  if (!view) return c.json({ error: '会话不存在' }, 404)
+  if (typeof text !== 'string') return c.json({ error: '参数不对' }, 400)
+  try {
+    await view.editText(c.req.param('itemId'), text)
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '保存失败' }, 409)
+  }
+  return c.json({ ok: true })
+})
+
 api.get('/sessions/:id/mcp', async (c) => {
   const view = await openView(c.req.param('id'))
   return c.json(view ? await view.mcpStatus() : [])

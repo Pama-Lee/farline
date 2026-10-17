@@ -14,6 +14,8 @@ export interface SessionMeta {
   // Rewound: the next process resumes at `at`, and the transcript is shown
   // without `from` (the user message rewound to) and what followed it.
   rewind?: { at: string; from: string }
+  // Reply text the user rewrote, by item id.
+  edited?: string[]
 }
 
 interface State {

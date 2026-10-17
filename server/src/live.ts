@@ -2,7 +2,7 @@
 // running Claude Code process (streaming-input query); otherwise it is a
 // read-only projection of the persisted transcript.
 import { randomUUID } from 'node:crypto'
-import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import {
   getSessionInfo,
@@ -630,6 +630,50 @@ export class SessionView {
     return { files }
   }
 
+  // Rewrite a reply in the transcript. The model reads the transcript again
+  // when the next process resumes, so the next turn sees the new text.
+  async editText(itemId: string, text: string) {
+    if (this.status !== 'idle' || (!this.live && runningElsewhere(this.id))) throw new Error('等这一轮结束再编辑')
+    const item = this.log.get(itemId)
+    if (item?.kind !== 'text' || item.streaming) throw new Error('找不到这段回复')
+    if (!text.trim()) throw new Error('内容不能为空')
+    const m = itemId.match(/^(.+):(\d+)$/)
+    const file = sessionFile(this.id)
+    if (!m || !file) throw new Error('找不到这段回复')
+    if (this.live) {
+      if (this.runningTasks) throw new Error('还有后台任务在运行')
+      this.close()
+      // Let the process finish its last writes.
+      await new Promise((r) => setTimeout(r, 500))
+    }
+    const [, uuid, idx] = m
+    let found = false
+    const lines = readFileSync(file, 'utf8').split('\n')
+    for (let i = 0; i < lines.length && !found; i++) {
+      if (!lines[i].includes(uuid)) continue
+      let e: any
+      try {
+        e = JSON.parse(lines[i])
+      } catch {
+        continue
+      }
+      const block = e.uuid === uuid && e.type === 'assistant' ? e.message?.content?.[Number(idx)] : undefined
+      if (block?.type !== 'text') continue
+      block.text = text
+      lines[i] = JSON.stringify(e)
+      found = true
+    }
+    if (!found) throw new Error('找不到这段回复')
+    const tmp = `${file}.farline-edit`
+    writeFileSync(tmp, lines.join('\n'), { mode: statSync(file).mode })
+    renameSync(tmp, file)
+    this.log.upsert({ ...item, text, edited: true })
+    this.meta.edited = [...new Set([...(this.meta.edited ?? []), itemId])].slice(-200)
+    state.sessions[this.id] = { ...this.meta }
+    save()
+    this.flushNow(true)
+  }
+
   truncateAt(messageId: string) {
     const i = this.log.items.findIndex((it) => it.id === messageId)
     if (i < 0) return
@@ -797,6 +841,10 @@ export async function openView(id: string): Promise<SessionView | undefined> {
     if (m.type === 'assistant' && typeof model === 'string' && !(m as any).parent_tool_use_id && model !== '<synthetic>') view.model = model
   }
   if (meta.rewind) view.truncateAt(meta.rewind.from)
+  for (const itemId of meta.edited ?? []) {
+    const it = view.log.get(itemId)
+    if (it?.kind === 'text') view.log.upsert({ ...it, edited: true })
+  }
   view.log.discardChanges()
   views.set(id, view)
   return view

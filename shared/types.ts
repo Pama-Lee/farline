@@ -35,7 +35,7 @@ export interface PermissionAsk {
 
 export type Item =
   | { kind: 'user'; id: string; text: string; images?: ImageRef[]; files?: string[]; ts?: number }
-  | { kind: 'text'; id: string; text: string; streaming?: boolean; ts?: number }
+  | { kind: 'text'; id: string; text: string; streaming?: boolean; ts?: number; edited?: boolean }
   | { kind: 'thinking'; id: string; text: string; streaming?: boolean }
   | {
       kind: 'tool'

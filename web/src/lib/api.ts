@@ -1,10 +1,11 @@
 import type {
+  Catalog,
   CreateBody,
-  DeepSeekStatus,
   EffortLevel,
   DirListing,
   McpServer,
-  ModelOption,
+  PluginInfo,
+  PluginStatus,
   PermissionMode,
   Provider,
   SendBody,
@@ -14,7 +15,8 @@ import type {
   Upload,
 } from '../../../shared/types.ts'
 
-export const MODELS_CHANGED = 'farline:models'
+// Plugins or settings changed what providers and plugin code are available.
+export const CATALOG_CHANGED = 'farline:catalog'
 
 export class ApiError extends Error {
   status: number
@@ -54,10 +56,12 @@ export const api = {
   login: (password: string) => req<{ ok: true }>('POST', '/login', { password }),
   logout: () => req<{ ok: true }>('POST', '/logout'),
   device: () => req<DeviceInfo>('GET', '/device'),
-  models: () => req<ModelOption[]>('GET', '/models'),
-  deepseek: () => req<DeepSeekStatus>('GET', '/deepseek'),
-  setDeepseekKey: (key: string) => req<DeepSeekStatus>('PUT', '/deepseek', { key }),
-  clearDeepseekKey: () => req<DeepSeekStatus>('DELETE', '/deepseek'),
+  catalog: () => req<Catalog>('GET', '/models'),
+  plugins: () => req<PluginInfo[]>('GET', '/plugins'),
+  pluginStatus: (id: string) => req<PluginStatus>('GET', `/plugins/${id}/status`),
+  setPluginEnabled: (id: string, enabled: boolean) => req<PluginInfo>('PUT', `/plugins/${id}/enabled`, { enabled }),
+  savePluginSettings: (id: string, values: Record<string, string | number | boolean | null>) => req<PluginInfo>('PUT', `/plugins/${id}/settings`, values),
+  testPluginNotification: (id: string) => req<{ ok: true }>('POST', `/plugins/${id}/test`),
   sessions: (offset = 0, limit = 40) => req<{ sessions: SessionSummary[]; nextOffset: number | null }>('GET', `/sessions?offset=${offset}&limit=${limit}`),
   session: (id: string, all = false) => req<SessionSnapshot>('GET', `/sessions/${id}${all ? '?all=1' : ''}`),
   create: (body: CreateBody) => req<{ id: string }>('POST', '/sessions', body),

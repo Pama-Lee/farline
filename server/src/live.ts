@@ -16,19 +16,15 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import { runningElsewhere } from './activity.ts'
 import { config } from './config.ts'
-import { deepseekKey } from './deepseek.ts'
+import { allProviders, emit, provider as pluginProvider, secretEnv } from './plugins/registry.ts'
+import type { SessionInfo } from './plugins/types.ts'
 import { notify } from './push.ts'
 import { save, state, type SessionMeta } from './store.ts'
 import { ItemLog } from './transcript.ts'
 import { loadUpload } from './uploads.ts'
-import type { EffortLevel, Item, McpServer, ModelOption, Patch, PermissionMode, Provider, SessionSnapshot, SessionState, SessionStatus } from '../../shared/types.ts'
+import type { Catalog, EffortLevel, Item, McpServer, ModelOption, Patch, PermissionMode, Provider, ProviderInfo, SessionSnapshot, SessionState, SessionStatus } from '../../shared/types.ts'
 
 const SNAPSHOT_ITEMS = 400
-
-export const DEEPSEEK_MODELS: ModelOption[] = [
-  { provider: 'deepseek', value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', desc: '推理和编码更强' },
-  { provider: 'deepseek', value: 'deepseek-flash', label: 'DeepSeek V4.1 Flash', desc: '响应更快，更省' },
-]
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -42,8 +38,54 @@ const MAIN: Record<string, { label: string; desc: string; resolved: string }> = 
 
 let claudeModels: ModelOption[] = Object.entries(MAIN).map(([value, m]) => ({ provider: 'claude', value, ...m, efforts: EFFORTS }))
 
+// Plugin providers that are ready to use (for example, have a key).
+function readyProviders() {
+  return allProviders().filter((p) => {
+    try {
+      return p.available()
+    } catch {
+      return false
+    }
+  })
+}
+
+export function catalog(): Catalog {
+  const providers: ProviderInfo[] = [{ id: 'claude', label: 'Claude' }]
+  const models: ModelOption[] = [...claudeModels]
+  for (const p of readyProviders()) {
+    let list: ModelOption[]
+    try {
+      list = p.models().map((m) => ({ ...m, provider: p.id }))
+    } catch {
+      continue
+    }
+    if (!list.length) continue
+    providers.push({ id: p.id, label: p.label, classifierModels: p.classifierModels, defaultPermissionMode: p.defaultPermissionMode })
+    models.push(...list)
+  }
+  return { providers, models }
+}
+
 export function models(): ModelOption[] {
-  return [...claudeModels, ...(deepseekKey() ? DEEPSEEK_MODELS : [])]
+  return catalog().models
+}
+
+export function providerReady(id: Provider): boolean {
+  return id === 'claude' || catalog().providers.some((p) => p.id === id)
+}
+
+export function providerLabel(id: Provider): string {
+  return id === 'claude' ? 'Claude' : (pluginProvider(id)?.label ?? id)
+}
+
+export function defaultModel(id: Provider): string {
+  return id === 'claude' ? 'opus' : (models().find((m) => m.provider === id && !m.more)?.value ?? '')
+}
+
+function classifierFor(meta: SessionMeta): string | undefined {
+  const list = meta.provider === 'claude' ? undefined : pluginProvider(meta.provider)?.classifierModels
+  if (!list?.length) return undefined
+  return meta.classifierModel && list.includes(meta.classifierModel) ? meta.classifierModel : list[0]
 }
 
 class Channel<T> implements AsyncIterable<T> {
@@ -128,9 +170,13 @@ export class SessionView {
       model: this.model || this.meta.model,
       permissionMode: this.meta.permissionMode,
       effort: this.meta.provider === 'claude' ? (this.meta.effort ?? 'xhigh') : null,
-      classifierModel: this.meta.provider === 'deepseek' ? (this.meta.classifierModel ?? 'deepseek-flash') : null,
+      classifierModel: classifierFor(this.meta) ?? null,
       live: this.live,
     }
+  }
+
+  info(): SessionInfo {
+    return { id: this.id, title: this.title, cwd: this.cwd, provider: this.meta.provider, model: this.model || this.meta.model }
   }
 
   snapshot(all = false): SessionSnapshot {
@@ -172,31 +218,13 @@ export class SessionView {
 
   private options() {
     const env: Record<string, string | undefined> = { ...process.env }
-    for (const k of Object.keys(env)) if (k.startsWith('FARLINE_') || k === 'DEEPSEEK_API_KEY') delete env[k]
+    for (const k of Object.keys(env)) if (k.startsWith('FARLINE_') || secretEnv.has(k)) delete env[k]
     env.CLAUDE_AGENT_SDK_CLIENT_APP = 'farline/1.0'
     let model: string | undefined = this.meta.model === 'default' ? undefined : this.meta.model
-    if (this.meta.provider === 'deepseek') {
-      Object.assign(env, {
-        ANTHROPIC_BASE_URL: `${config.deepseekBase}/anthropic`,
-        ANTHROPIC_AUTH_TOKEN: deepseekKey(),
-        ANTHROPIC_MODEL: this.meta.model,
-        ANTHROPIC_DEFAULT_OPUS_MODEL: this.meta.model,
-        // Claude Code's auto-mode classifier runs on the sonnet slot (checked
-        // in 2.1.299: CLAUDE_CODE_AUTO_MODE_MODEL is not consulted).
-        ANTHROPIC_DEFAULT_SONNET_MODEL: this.meta.classifierModel ?? 'deepseek-flash',
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'deepseek-flash',
-        ANTHROPIC_SMALL_FAST_MODEL: 'deepseek-flash',
-        CLAUDE_CODE_SUBAGENT_MODEL: this.meta.model,
-        // There is no Anthropic server-side classifier behind DeepSeek; skip
-        // the probe and classify locally from the first call.
-        CLAUDE_CODE_AUTO_MODE_SERVER: '0',
-        // Claude Code assumes 200k for models it does not recognise; DeepSeek
-        // V4 Pro / V4.1 Flash take 1M, so compact against that instead.
-        CLAUDE_CODE_MAX_CONTEXT_TOKENS: '1000000',
-        CLAUDE_CODE_AUTO_COMPACT_WINDOW: '1000000',
-        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-        API_TIMEOUT_MS: '600000',
-      })
+    if (this.meta.provider !== 'claude') {
+      const p = pluginProvider(this.meta.provider)
+      if (!p || !providerReady(p.id)) throw new Error(`${providerLabel(this.meta.provider)} 不可用，去设置里检查对应插件`)
+      Object.assign(env, p.env({ model: this.meta.model, classifierModel: classifierFor(this.meta) }))
       model = this.meta.model
     }
     return {
@@ -292,9 +320,11 @@ export class SessionView {
     }
     this.status = 'idle'
     this.flushNow(true)
+    const last = [...this.log.items].reverse().find((it) => it.kind === 'text')
+    const text = last?.kind === 'text' ? last.text : ''
+    emit('turn.completed', { session: this.info(), text, error: !!m.is_error || m.subtype !== 'success' })
     if (this.subscribers.size === 0) {
-      const last = [...this.log.items].reverse().find((it) => it.kind === 'text')
-      void notify(this.title || '会话', last?.kind === 'text' ? last.text.slice(0, 120) : '已完成', `/s/${this.id}`)
+      void notify({ kind: 'done', title: this.title || '会话', body: text.slice(0, 120) || '已完成', url: `/s/${this.id}`, sessionId: this.id })
     }
     // Claude Code writes its generated title a few seconds after the turn.
     if (this.turns === 1) for (const ms of [0, 6000, 20000]) setTimeout(() => void this.refreshTitle(), ms)
@@ -310,6 +340,7 @@ export class SessionView {
   }
 
   send(text: string, uploadIds: string[] = []) {
+    if (!this.q && !providerReady(this.meta.provider)) throw new Error(`${providerLabel(this.meta.provider)} 不可用，去设置里检查对应插件`)
     const uploads = uploadIds.map(loadUpload).filter((u) => !!u)
     const content: any[] = []
     const lines = [text.trim(), ...uploads.map((u) => `[附件] ${u.path}`)].filter(Boolean)
@@ -334,6 +365,7 @@ export class SessionView {
     this.lastActive = Date.now()
     this.status = 'running'
     this.flushNow(true)
+    emit('message.sent', { session: this.info(), text: text.trim() })
   }
 
   async interrupt() {
@@ -345,12 +377,7 @@ export class SessionView {
   // means a fresh Claude Code process that resumes this session.
   private respawn = false
 
-  // The key is baked into the running process; pick up a new one.
-  deepseekKeyChanged() {
-    if (this.meta.provider === 'deepseek') this.respawnWhenIdle()
-  }
-
-  private respawnWhenIdle() {
+  respawnWhenIdle() {
     if (!this.q) return
     if (this.status === 'idle') this.close()
     else this.respawn = true
@@ -359,17 +386,18 @@ export class SessionView {
   async update(patch: { permissionMode?: PermissionMode; model?: string; effort?: EffortLevel; provider?: Provider; classifierModel?: string }) {
     if (patch.provider && patch.provider !== this.meta.provider) {
       this.meta.provider = patch.provider
-      this.meta.model = patch.model ?? (patch.provider === 'deepseek' ? 'deepseek-v4-pro' : 'opus')
+      this.meta.model = patch.model ?? defaultModel(patch.provider)
       this.model = ''
       // Each provider brings its default permission mode along.
       if (!patch.permissionMode) {
-        if (patch.provider === 'deepseek') this.meta.permissionMode = 'bypassPermissions'
+        const preferred = patch.provider === 'claude' ? undefined : pluginProvider(patch.provider)?.defaultPermissionMode
+        if (preferred) this.meta.permissionMode = preferred
         else if (this.meta.permissionMode === 'bypassPermissions') this.meta.permissionMode = 'auto'
       }
       this.respawnWhenIdle()
       patch = { ...patch, model: undefined }
     }
-    if (patch.classifierModel && this.meta.provider === 'deepseek' && patch.classifierModel !== (this.meta.classifierModel ?? 'deepseek-flash')) {
+    if (patch.classifierModel && patch.classifierModel !== classifierFor(this.meta)) {
       this.meta.classifierModel = patch.classifierModel
       this.respawnWhenIdle()
     }
@@ -420,7 +448,7 @@ export class SessionView {
         const questions = Array.isArray((input as any).questions) ? (input as any).questions : []
         this.log.upsert({ kind: 'ask', id: itemId, questions, status: 'pending', reqId, answer: prev?.kind === 'ask' ? prev.answer : undefined })
         this.pending.set(reqId, { kind: 'ask', itemId, input, resolve })
-        void this.alert('有问题需要你回答', questions[0]?.question ?? '')
+        void this.alert('question', '有问题需要你回答', questions[0]?.question ?? '')
       } else {
         const prev = this.log.get(itemId)
         const base: Item = prev?.kind === 'tool' ? prev : { kind: 'tool', id: itemId, name: toolName, input, status: 'running' }
@@ -437,15 +465,18 @@ export class SessionView {
           },
         })
         this.pending.set(reqId, { kind: 'tool', itemId, input, suggestions: opts.suggestions, resolve })
-        void this.alert('需要授权', opts.title ?? toolName)
+        void this.alert('permission', '需要授权', opts.title ?? toolName)
       }
       this.status = 'requires_action'
       this.flushNow(true)
       opts.signal.addEventListener('abort', () => this.settle(reqId, { behavior: 'deny', message: 'aborted' }), { once: true })
     })
 
-  private async alert(title: string, body: string) {
-    if (this.subscribers.size === 0) await notify(`${title} · ${this.title || '会话'}`, body.slice(0, 120), `/s/${this.id}`)
+  private async alert(kind: 'permission' | 'question', title: string, body: string) {
+    emit('attention', { session: this.info(), kind, title: body })
+    if (this.subscribers.size === 0) {
+      await notify({ kind: 'attention', title: `${title} · ${this.title || '会话'}`, body: body.slice(0, 120), url: `/s/${this.id}`, sessionId: this.id })
+    }
   }
 
   private settle(reqId: string, result: PermissionResult) {
@@ -538,12 +569,14 @@ export async function openView(id: string): Promise<SessionView | undefined> {
   return view
 }
 
-export function createView(cwd: string, meta: SessionMeta): SessionView {
+export function createView(cwd: string, meta: SessionMeta, title: string): SessionView {
   const id = randomUUID()
   const view = new SessionView(id, cwd, meta, false)
+  view.title = title
   state.sessions[id] = { ...meta }
   save()
   views.set(id, view)
+  emit('session.created', { session: view.info() })
   return view
 }
 

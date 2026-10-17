@@ -4,6 +4,7 @@ import { highlight } from '../components/Markdown.tsx'
 import { Sheet } from '../components/Sheet.tsx'
 import { Spinner } from '../components/bits.tsx'
 import { openViewer } from '../lib/viewer.ts'
+import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { category, stepLabel, stepsSummary, type StepItem } from '../lib/steps.ts'
 
 const ICONS: Record<string, ReactNode> = {
@@ -18,10 +19,10 @@ const ICONS: Record<string, ReactNode> = {
   other: <Wrench size={19} strokeWidth={1.6} />,
 }
 
-export function StepsSheet({ steps, onClose }: { steps: StepItem[]; onClose: () => void }) {
+export function StepsSheet({ steps, sessionId, onClose }: { steps: StepItem[]; sessionId: string | null; onClose: () => void }) {
   const [openId, setOpenId] = useState<string | null>(steps.length === 1 ? steps[0].id : null)
   const open = steps.find((s) => s.id === openId)
-  if (open) return <StepDetail step={open} onClose={onClose} onBack={steps.length > 1 ? () => setOpenId(null) : undefined} />
+  if (open) return <StepDetail step={open} sessionId={sessionId} onClose={onClose} onBack={steps.length > 1 ? () => setOpenId(null) : undefined} />
   return (
     <Sheet title={stepsSummary(steps)} onClose={onClose} size="medium">
       <div className="timeline">
@@ -70,7 +71,8 @@ function Diff({ oldText, newText }: { oldText: string; newText: string }) {
   )
 }
 
-function StepDetail({ step, onClose, onBack }: { step: StepItem; onClose: () => void; onBack?: () => void }) {
+function StepDetail({ step, sessionId, onClose, onBack }: { step: StepItem; sessionId: string | null; onClose: () => void; onBack?: () => void }) {
+  const { toolRenderers } = usePlugins()
   if (step.kind === 'thinking')
     return (
       <Sheet title="思考" onClose={onClose} onBack={onBack} size="medium">
@@ -202,6 +204,16 @@ function StepDetail({ step, onClose, onBack }: { step: StepItem; onClose: () => 
           {output}
         </>
       )
+  }
+  // A plugin may take over the view; if it breaks, the default shows instead.
+  const custom = toolRenderers.find((r) => r.match(step.name))
+  if (custom) {
+    const View = custom.component
+    body = (
+      <PluginBoundary pluginId={custom.pluginId} fallback={body}>
+        <View tool={step} sessionId={sessionId} />
+      </PluginBoundary>
+    )
   }
   return (
     <Sheet title={step.name.replace(/^mcp__(.+?)__/, '$1 · ')} onClose={onClose} onBack={onBack} size="medium">

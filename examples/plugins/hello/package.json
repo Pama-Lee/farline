@@ -1,0 +1,13 @@
+{
+  "name": "farline-plugin-hello",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "farline": {
+    "id": "hello",
+    "name": "Hello",
+    "apiVersion": 1,
+    "server": "./server.js",
+    "web": "./web.js"
+  }
+}

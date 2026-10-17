@@ -13,8 +13,10 @@ export const config = {
   fsRoot: resolve(env.FARLINE_FS_ROOT ?? '/'),
   claudePath: env.FARLINE_CLAUDE_PATH ?? join(homedir(), '.local/bin/claude'),
   deviceName: env.FARLINE_DEVICE_NAME ?? hostname(),
-  deepseekKey: env.DEEPSEEK_API_KEY ?? '',
-  deepseekBase: env.DEEPSEEK_BASE_URL ?? 'https://api.deepseek.com',
+  // Plugins shipped with Farline; user plugins live in <dataDir>/plugins.
+  builtinPluginsDir: env.FARLINE_BUILTIN_PLUGINS ?? new URL('../../plugins', import.meta.url).pathname,
+  // Public address for links in notifications sent outside the browser.
+  publicUrl: env.FARLINE_PUBLIC_URL ?? '',
   // Cookies get `Secure` unless explicitly running over plain HTTP locally.
   insecureCookie: env.FARLINE_INSECURE_COOKIE === '1',
   // Web push providers want a contact for the sender; set your own address.

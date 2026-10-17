@@ -7,8 +7,9 @@ import { streamSSE } from 'hono/streaming'
 import { sessionActivity } from './activity.ts'
 import { isAuthed, login, logout, requireAuth, setPassword } from './auth.ts'
 import { config, underFsRoot } from './config.ts'
-import { clearKey, deepseekKey, saveKey, status as deepseekStatus } from './deepseek.ts'
-import { DEEPSEEK_MODELS, allViews, cachedView, createView, models, openView, warmModels } from './live.ts'
+import { allViews, cachedView, catalog, createView, defaultModel, models, openView, providerLabel, providerReady, warmModels } from './live.ts'
+import { noteOrigin } from './origin.ts'
+import { getPlugin, listPlugins, loadPlugins, pluginAsset, pluginFetch, pluginInfo, pluginStatus, saveSettings, setEnabled, testNotification } from './plugins/host.ts'
 import { subscribe, unsubscribe, vapidPublicKey, notify } from './push.ts'
 import { save, state } from './store.ts'
 import { requestTitle } from './titles.ts'
@@ -35,6 +36,10 @@ app.get('/api/me', (c) => c.json({ authed: isAuthed(c) }))
 
 const api = new Hono()
 api.use('*', requireAuth)
+api.use('*', async (c, next) => {
+  if (c.req.method !== 'GET') noteOrigin(c.req.header('origin'))
+  await next()
+})
 
 // The remembered directory may have been deleted since; fall back quietly.
 api.get('/device', (c) => {
@@ -42,26 +47,70 @@ api.get('/device', (c) => {
   return c.json({ name: config.deviceName, defaultCwd: last ?? config.defaultCwd, prefs: { ...state.prefs, lastCwd: last } })
 })
 
-api.get('/models', (c) => c.json(models()))
+api.get('/models', (c) => c.json(catalog()))
 
-api.get('/deepseek', async (c) => c.json(await deepseekStatus()))
+// ---- plugins ----
 
-api.put('/deepseek', async (c) => {
-  const { key } = await c.req.json<{ key?: unknown }>().catch(() => ({ key: undefined }))
-  if (typeof key !== 'string') return c.json({ error: 'bad key' }, 400)
+api.get('/plugins', (c) => c.json(listPlugins()))
+
+api.get('/plugins/:id/status', async (c) => {
+  const p = getPlugin(c.req.param('id'))
+  return p ? c.json(await pluginStatus(p)) : c.json({ error: 'not found' }, 404)
+})
+
+api.put('/plugins/:id/enabled', async (c) => {
+  const p = getPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'not found' }, 404)
+  const { enabled } = await c.req.json<{ enabled?: unknown }>().catch(() => ({ enabled: undefined }))
+  if (typeof enabled !== 'boolean') return c.json({ error: 'bad request' }, 400)
+  await setEnabled(p, enabled)
+  return c.json(pluginInfo(p))
+})
+
+api.put('/plugins/:id/settings', async (c) => {
+  const p = getPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'not found' }, 404)
+  const body = await c.req.json<Record<string, unknown>>().catch(() => null)
+  if (!body || typeof body !== 'object') return c.json({ error: 'bad request' }, 400)
   try {
-    await saveKey(key)
+    await saveSettings(p, body)
   } catch (e: any) {
     return c.json({ error: e?.message ?? '保存失败' }, 400)
   }
-  for (const v of allViews()) v.deepseekKeyChanged()
-  return c.json(await deepseekStatus())
+  return c.json(pluginInfo(p))
 })
 
-api.delete('/deepseek', async (c) => {
-  clearKey()
-  for (const v of allViews()) v.deepseekKeyChanged()
-  return c.json(await deepseekStatus())
+api.post('/plugins/:id/test', async (c) => {
+  const p = getPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'not found' }, 404)
+  try {
+    await testNotification(p)
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '发送失败' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+// Routes a plugin registers on ctx.http.
+api.all('/ext/:id/*', (c) => {
+  const id = c.req.param('id')
+  const p = getPlugin(id)
+  if (!p) return c.json({ error: 'not found' }, 404)
+  const rest = new URL(c.req.url).pathname.slice(`/api/ext/${id}`.length) || '/'
+  return pluginFetch(p, c.req.raw, rest)
+})
+
+// Browser code of plugins. Behind login like the rest of the API.
+api.get('/plugin-assets/:id/*', (c) => {
+  const id = c.req.param('id')
+  const p = getPlugin(id)
+  const rel = decodeURIComponent(new URL(c.req.url).pathname.slice(`/api/plugin-assets/${id}/`.length))
+  const file = p && pluginAsset(p, rel)
+  if (!file) return c.json({ error: 'not found' }, 404)
+  return c.body(readFileSync(file), 200, {
+    'content-type': TYPES[extname(file)] ?? (extname(file) === '.mjs' ? 'text/javascript; charset=utf-8' : 'application/octet-stream'),
+    'cache-control': 'private, no-cache',
+  })
 })
 
 // Ordered by the last real message, not file mtime: the Claude app bridge
@@ -89,13 +138,22 @@ api.get('/sessions', async (c) => {
       updatedAt: Math.max(act.at || info.createdAt || info.lastModified, view?.live ? view.lastActive : 0),
       status: view ? view.sessionState().status : now - info.lastModified < 10 * 60_000 && act.running ? 'busy_elsewhere' : 'idle',
       provider: meta?.provider ?? 'claude',
+      ...(meta?.provider && meta.provider !== 'claude' ? { providerLabel: providerLabel(meta.provider) } : {}),
     })
   }
   // Started here moments ago, transcript not on disk yet.
   for (const v of allViews()) {
     if (seen.has(v.id) || v.meta.hidden || !v.live) continue
     const st = v.sessionState()
-    rows.push({ id: v.id, title: st.title || '新会话', cwd: st.cwd, updatedAt: v.lastActive, status: st.status, provider: st.provider })
+    rows.push({
+      id: v.id,
+      title: st.title || '新会话',
+      cwd: st.cwd,
+      updatedAt: v.lastActive,
+      status: st.status,
+      provider: st.provider,
+      ...(st.provider !== 'claude' ? { providerLabel: providerLabel(st.provider) } : {}),
+    })
   }
   rows.sort((x, y) => y.updatedAt - x.updatedAt)
   const page = rows.slice(offset, offset + limit).map(({ firstPrompt, ...s }) => {
@@ -110,16 +168,16 @@ api.post('/sessions', async (c) => {
   const body = await c.req.json<CreateBody>()
   const dirs = listDirs(body.cwd)
   if (!dirs) return c.json({ error: '目录不可用' }, 400)
-  const provider: Provider = body.provider === 'deepseek' && deepseekKey() ? 'deepseek' : 'claude'
-  // DeepSeek sessions run with every permission open unless told otherwise.
-  const permissionMode = MODES.includes(body.permissionMode) ? body.permissionMode : provider === 'deepseek' ? 'bypassPermissions' : 'auto'
-  const model = models().some((m) => m.provider === provider && m.value === body.model) ? body.model : provider === 'deepseek' ? 'deepseek-v4-pro' : 'opus'
+  if (body.provider && body.provider !== 'claude' && !providerReady(body.provider)) return c.json({ error: `${providerLabel(body.provider)} 不可用` }, 400)
+  const provider: Provider = body.provider || 'claude'
+  const info = catalog().providers.find((p) => p.id === provider)
+  const permissionMode = MODES.includes(body.permissionMode) ? body.permissionMode : (info?.defaultPermissionMode ?? 'auto')
+  const model = models().some((m) => m.provider === provider && m.value === body.model) ? body.model : defaultModel(provider)
   const effort = body.effort && EFFORTS.includes(body.effort) ? body.effort : 'xhigh'
-  const classifierModel = body.classifierModel && DEEPSEEK_MODELS.some((m) => m.value === body.classifierModel) ? body.classifierModel : undefined
+  const classifierModel = body.classifierModel && info?.classifierModels?.includes(body.classifierModel) ? body.classifierModel : undefined
   state.prefs = { lastCwd: dirs.path, provider, model, permissionMode, effort, classifierModel }
   save()
-  const view = createView(dirs.path, { provider, model, permissionMode, effort, classifierModel })
-  view.title = body.text.trim().replace(/\s+/g, ' ').slice(0, 40)
+  const view = createView(dirs.path, { provider, model, permissionMode, effort, classifierModel }, body.text.trim().replace(/\s+/g, ' ').slice(0, 40))
   view.send(body.text, body.uploads)
   return c.json({ id: view.id })
 })
@@ -154,7 +212,11 @@ api.post('/sessions/:id/messages', async (c) => {
   if (view.sessionState().status === 'busy_elsewhere') return c.json({ error: '这个会话正在别处运行' }, 409)
   const body = await c.req.json<SendBody>()
   if (!body.text?.trim() && !body.uploads?.length) return c.json({ error: 'empty' }, 400)
-  view.send(body.text ?? '', body.uploads)
+  try {
+    view.send(body.text ?? '', body.uploads)
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '发送失败' }, 400)
+  }
   return c.json({ ok: true })
 })
 
@@ -183,10 +245,11 @@ api.patch('/sessions/:id', async (c) => {
   if (!view) return c.json({ error: 'not found' }, 404)
   if (body.permissionMode && !MODES.includes(body.permissionMode)) return c.json({ error: 'bad mode' }, 400)
   if (body.effort && !EFFORTS.includes(body.effort)) return c.json({ error: 'bad effort' }, 400)
-  if (body.provider && !(body.provider === 'claude' || (body.provider === 'deepseek' && deepseekKey()))) return c.json({ error: 'bad provider' }, 400)
+  if (body.provider && !providerReady(body.provider)) return c.json({ error: `${providerLabel(body.provider)} 不可用` }, 400)
   const provider = body.provider ?? view.meta.provider
   if (body.model && !models().some((m) => m.provider === provider && m.value === body.model)) return c.json({ error: 'bad model' }, 400)
-  if (body.classifierModel && !DEEPSEEK_MODELS.some((m) => m.value === body.classifierModel)) return c.json({ error: 'bad classifier' }, 400)
+  const classifiers = catalog().providers.find((p) => p.id === provider)?.classifierModels ?? []
+  if (body.classifierModel && !classifiers.includes(body.classifierModel)) return c.json({ error: 'bad classifier' }, 400)
   if (typeof body.title === 'string' && body.title.trim()) {
     view.meta.title = body.title.trim().slice(0, 60)
     view.title = view.meta.title
@@ -277,7 +340,7 @@ api.post('/push/unsubscribe', async (c) => {
   return c.json({ ok: true })
 })
 api.post('/push/test', async (c) => {
-  await notify('通知已开启', '会话完成或需要你处理时会提醒你', '/')
+  await notify({ kind: 'test', title: '通知已开启', body: '会话完成或需要你处理时会提醒你', url: '/' })
   return c.json({ ok: true })
 })
 
@@ -310,6 +373,8 @@ app.get('*', (c) => {
     'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
   })
 })
+
+await loadPlugins()
 
 serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`farline listening on http://${info.address}:${info.port}`)

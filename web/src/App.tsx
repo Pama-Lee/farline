@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ModelOption } from '../../shared/types.ts'
+import type { Catalog } from '../../shared/types.ts'
 import { Spinner, ToastHost } from './components/bits.tsx'
-import { MODELS_CHANGED, api, setUnauthorizedHandler, type DeviceInfo } from './lib/api.ts'
+import { CATALOG_CHANGED, api, setUnauthorizedHandler, type DeviceInfo } from './lib/api.ts'
 import { useRoute } from './lib/router.ts'
 import { useDesktop } from './lib/useDesktop.ts'
 import { closeViewer, useViewer } from './lib/viewer.ts'
 import { ImageViewer } from './components/ImageViewer.tsx'
+import { syncPlugins } from './plugins/runtime.tsx'
 import { Home } from './screens/Home.tsx'
 import { Login } from './screens/Login.tsx'
 import { SessionScreen } from './screens/Session.tsx'
@@ -14,7 +15,7 @@ import { Sidebar } from './screens/Sidebar.tsx'
 export function App() {
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [device, setDevice] = useState<DeviceInfo | null>(null)
-  const [models, setModels] = useState<ModelOption[]>([])
+  const [catalog, setCatalog] = useState<Catalog>({ providers: [], models: [] })
   const route = useRoute()
   const desktop = useDesktop()
   const viewer = useViewer()
@@ -28,9 +29,10 @@ export function App() {
       const { authed } = await api.me()
       setAuthed(authed)
       if (!authed) return
-      const [d, m] = await Promise.all([api.device(), api.models()])
+      const [d, c, plugins] = await Promise.all([api.device(), api.catalog(), api.plugins()])
       setDevice(d)
-      setModels(m)
+      setCatalog(c)
+      void syncPlugins(plugins)
     } catch {
       setAuthed((a) => a ?? false)
     }
@@ -41,11 +43,14 @@ export function App() {
     void boot()
   }, [boot])
 
-  // Settings can add or remove a provider.
+  // Turning plugins on or off, or setting a key, changes providers and plugin code.
   useEffect(() => {
-    const refresh = () => api.models().then(setModels, () => undefined)
-    window.addEventListener(MODELS_CHANGED, refresh)
-    return () => window.removeEventListener(MODELS_CHANGED, refresh)
+    const refresh = () => {
+      api.catalog().then(setCatalog, () => undefined)
+      api.plugins().then(syncPlugins, () => undefined)
+    }
+    window.addEventListener(CATALOG_CHANGED, refresh)
+    return () => window.removeEventListener(CATALOG_CHANGED, refresh)
   }, [])
 
   // Refresh prefs (last directory, model) whenever we come back home.
@@ -65,9 +70,9 @@ export function App() {
     // Desktop: sidebar + thread. With nothing selected the pane is a new session.
     const main =
       route.name === 'session' ? (
-        <SessionScreen key={route.id} id={route.id} device={device} models={models} />
+        <SessionScreen key={route.id} id={route.id} device={device} catalog={catalog} />
       ) : (
-        <SessionScreen key={`new:${route.name === 'new' ? route.cwd : ''}`} id={null} newCwd={route.name === 'new' ? route.cwd || undefined : undefined} device={device} models={models} />
+        <SessionScreen key={`new:${route.name === 'new' ? route.cwd : ''}`} id={null} newCwd={route.name === 'new' ? route.cwd || undefined : undefined} device={device} catalog={catalog} />
       )
     body = (
       <div className={`desktop${viewer ? ' with-panel' : ''}`}>
@@ -75,8 +80,8 @@ export function App() {
         <main className="main-pane">{main}</main>
       </div>
     )
-  } else if (route.name === 'session') body = <SessionScreen key={route.id} id={route.id} device={device} models={models} />
-  else if (route.name === 'new') body = <SessionScreen key="new" id={null} newCwd={route.cwd || undefined} device={device} models={models} />
+  } else if (route.name === 'session') body = <SessionScreen key={route.id} id={route.id} device={device} catalog={catalog} />
+  else if (route.name === 'new') body = <SessionScreen key="new" id={null} newCwd={route.cwd || undefined} device={device} catalog={catalog} />
   else body = <Home device={device} onLogout={() => setAuthed(false)} />
 
   return (

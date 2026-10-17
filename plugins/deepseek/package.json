@@ -1,0 +1,12 @@
+{
+  "name": "farline-plugin-deepseek",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "farline": {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "apiVersion": 1,
+    "server": "./server.ts"
+  }
+}

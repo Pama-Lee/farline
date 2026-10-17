@@ -97,7 +97,7 @@ export function Sidebar({ device, activeId, onLogout }: { device: DeviceInfo | n
               <div className="t">{s.title}</div>
               <div className="s">
                 {basename(s.cwd) || device?.name}
-                {s.provider === 'deepseek' && <span className="tag">DeepSeek</span>}
+                {s.providerLabel && <span className="tag">{s.providerLabel}</span>}
               </div>
             </span>
           </button>

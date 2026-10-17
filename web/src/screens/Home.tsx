@@ -86,7 +86,7 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
               <div className="s">
                 {basename(s.cwd) || device?.name}
                 <Laptop size={15} strokeWidth={1.7} color="var(--green)" style={{ opacity: s.status === 'idle' ? 0.55 : 1, flex: 'none' }} />
-                {s.provider === 'deepseek' && <span className="tag">DeepSeek</span>}
+                {s.providerLabel && <span className="tag">{s.providerLabel}</span>}
               </div>
             </span>
           </button>

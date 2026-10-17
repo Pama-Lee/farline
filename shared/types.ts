@@ -1,6 +1,7 @@
 // Wire types shared by server and web.
 
-export type Provider = 'claude' | 'deepseek'
+// 'claude' is built in; any other id comes from a plugin.
+export type Provider = string
 
 export type PermissionMode = 'default' | 'auto' | 'acceptEdits' | 'plan' | 'bypassPermissions'
 
@@ -65,6 +66,8 @@ export interface SessionSummary {
   updatedAt: number
   status: SessionStatus
   provider: Provider
+  // Set for plugin providers, so lists can tag them without the catalog.
+  providerLabel?: string
 }
 
 export interface SessionState {
@@ -76,7 +79,8 @@ export interface SessionState {
   model: string
   permissionMode: PermissionMode
   effort: EffortLevel | null
-  // DeepSeek sessions: model used by Claude Code's auto-mode classifier.
+  // Plugin providers with a classifier choice: model used by Claude Code's
+  // auto-mode classifier.
   classifierModel: string | null
   live: boolean
 }
@@ -140,10 +144,55 @@ export interface CreateBody extends SendBody {
   classifierModel?: string
 }
 
-export interface DeepSeekStatus {
-  // Where the API key comes from: the settings page or DEEPSEEK_API_KEY.
-  source: 'saved' | 'env' | null
+export interface ProviderInfo {
+  id: Provider
+  label: string
+  // Models the auto-mode classifier may run on; the first is the default.
+  classifierModels?: string[]
+  defaultPermissionMode?: PermissionMode
+}
+
+export interface Catalog {
+  providers: ProviderInfo[]
+  models: ModelOption[]
+}
+
+// ---- plugins ----
+
+export type SettingType = 'text' | 'secret' | 'number' | 'boolean' | 'select'
+
+export interface SettingFieldView {
+  key: string
+  label: string
+  type: SettingType
+  placeholder?: string
+  options?: { value: string; label: string }[]
+  // Plain values are sent as is; secrets only as a hint like "sk-…324c".
+  value?: string | number | boolean
   hint?: string
-  invalid?: boolean
-  balance?: { available: boolean; balances: { currency: string; total: string }[] }
+  source?: 'saved' | 'env'
+}
+
+export interface PluginStatus {
+  // Short text for the settings row, e.g. a balance.
+  summary?: string
+  tone?: 'danger'
+  rows?: { label: string; value: string; tone?: 'danger' }[]
+}
+
+export interface PluginInfo {
+  id: string
+  name: string
+  version: string
+  source: 'builtin' | 'local' | 'npm'
+  enabled: boolean
+  state: 'active' | 'disabled' | 'error'
+  error?: string
+  // URL of the browser entry, versioned for caching.
+  web?: string
+  settings: SettingFieldView[]
+  links: { label: string; url: string }[]
+  hasStatus: boolean
+  // Registers a notification channel, so "send test" makes sense.
+  notifies: boolean
 }

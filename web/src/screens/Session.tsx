@@ -1,6 +1,6 @@
-import { ArrowUp, ChevronLeft, ChevronRight, Copy, EyeOff, FileText, Mic, MoreHorizontal, PencilLine, Play, Plus, RefreshCw, Square, X } from 'lucide-react'
+import { ArrowUp, ChevronLeft, ChevronRight, Copy, EyeOff, FileText, Mic, MoreHorizontal, PencilLine, Play, Plus, Puzzle, RefreshCw, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { EffortLevel, Item, ModelOption, PermissionMode, Provider, SessionState } from '../../../shared/types.ts'
+import type { Catalog, EffortLevel, Item, ModelOption, PermissionMode, Provider, ProviderInfo, SessionState } from '../../../shared/types.ts'
 import { Markdown } from '../components/Markdown.tsx'
 import { Sheet } from '../components/Sheet.tsx'
 import { Spinner, toast } from '../components/bits.tsx'
@@ -12,6 +12,7 @@ import { runningStep, stepLabel, stepsSummary, toBlocks, type StepItem } from '.
 import { useDesktop } from '../lib/useDesktop.ts'
 import { useSession } from '../lib/useSession.ts'
 import { openViewer, type ViewerImage } from '../lib/viewer.ts'
+import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { DirPicker } from '../sheets/DeviceSheet.tsx'
 import { ContextSheet } from '../sheets/ContextSheet.tsx'
 import { EFFORT_LABELS, ModelSheet, isCurrent } from '../sheets/ModelSheet.tsx'
@@ -21,7 +22,7 @@ interface Props {
   id: string | null
   newCwd?: string
   device: DeviceInfo | null
-  models: ModelOption[]
+  catalog: Catalog
 }
 
 type ToolItem = Extract<Item, { kind: 'tool' }>
@@ -29,16 +30,17 @@ type AskItem = Extract<Item, { kind: 'ask' }>
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp)$/i
 
-export function SessionScreen({ id, newCwd, device, models }: Props) {
+export function SessionScreen({ id, newCwd, device, catalog }: Props) {
+  const { models, providers } = catalog
   const session = useSession(id)
   const { state, items } = session
   const prefs = device?.prefs ?? {}
   const [draft, setDraft] = useState<{ provider: Provider; model: string; mode: PermissionMode; effort: EffortLevel; classifierModel: string }>(() => ({
     provider: prefs.provider ?? 'claude',
     model: prefs.model && prefs.model !== 'default' ? prefs.model : 'opus',
-    mode: defaultMode(prefs.provider ?? 'claude', prefs.permissionMode),
+    mode: defaultMode(providers, prefs.provider ?? 'claude', prefs.permissionMode),
     effort: prefs.effort ?? 'xhigh',
-    classifierModel: prefs.classifierModel ?? 'deepseek-flash',
+    classifierModel: prefs.classifierModel ?? '',
   }))
   const [steps, setSteps] = useState<StepItem[] | null>(null)
   const [stepsId, setStepsId] = useState<string | null>(null)
@@ -56,7 +58,7 @@ export function SessionScreen({ id, newCwd, device, models }: Props) {
   const model = state ? state.model : draft.model
   const mode = state?.permissionMode ?? draft.mode
   const effort = state ? state.effort : provider === 'claude' ? draft.effort : null
-  const classifierModel = state ? state.classifierModel : provider === 'deepseek' ? draft.classifierModel : null
+  const classifierModel = state ? state.classifierModel : classifierOf(providers, provider, draft.classifierModel)
   const status = state?.status ?? 'idle'
   const busy = status === 'running' || status === 'requires_action'
 
@@ -108,7 +110,7 @@ export function SessionScreen({ id, newCwd, device, models }: Props) {
   const modelLabel = current?.label ?? prettyModel(model)
 
   const changeModel = async (m: ModelOption) => {
-    if (!id) return setDraft((d) => ({ ...d, provider: m.provider, model: m.value, mode: m.provider === d.provider ? d.mode : defaultMode(m.provider, d.mode) }))
+    if (!id) return setDraft((d) => ({ ...d, provider: m.provider, model: m.value, mode: m.provider === d.provider ? d.mode : defaultMode(providers, m.provider, d.mode) }))
     try {
       session.setState(await api.update(id, m.provider === provider ? { model: m.value } : { provider: m.provider, model: m.value }))
       if (m.provider !== provider) toast(`已切换到 ${m.label}`)
@@ -144,7 +146,7 @@ export function SessionScreen({ id, newCwd, device, models }: Props) {
   const send = async (text: string, uploads: string[]) => {
     nearBottom.current = true
     if (!id) {
-      const res = await api.create({ cwd, provider: draft.provider, model: draft.model, permissionMode: draft.mode, effort: draft.effort, classifierModel: draft.classifierModel, text, uploads })
+      const res = await api.create({ cwd, provider: draft.provider, model: draft.model, permissionMode: draft.mode, effort: draft.effort, classifierModel: classifierModel ?? undefined, text, uploads })
       navigate(`/s/${res.id}`, true)
       return
     }
@@ -257,6 +259,7 @@ export function SessionScreen({ id, newCwd, device, models }: Props) {
             classifierModel={classifierModel}
             mode={mode}
             models={models}
+            providers={providers}
             onModel={changeModel}
             onEffort={changeEffort}
             onClassifier={changeClassifier}
@@ -272,6 +275,7 @@ export function SessionScreen({ id, newCwd, device, models }: Props) {
       {steps && (
         <StepsSheet
           steps={steps}
+          sessionId={id}
           onClose={() => {
             setSteps(null)
             setStepsId(null)
@@ -294,11 +298,18 @@ export function SessionScreen({ id, newCwd, device, models }: Props) {
   )
 }
 
-// DeepSeek sessions open with every permission granted; Claude ones never
-// inherit that from a DeepSeek draft.
-function defaultMode(provider: Provider, previous?: PermissionMode): PermissionMode {
-  if (provider === 'deepseek') return 'bypassPermissions'
+// A provider may bring its own default (DeepSeek opens every permission);
+// others never inherit that from a previous draft.
+function defaultMode(providers: ProviderInfo[], provider: Provider, previous?: PermissionMode): PermissionMode {
+  const preferred = providers.find((p) => p.id === provider)?.defaultPermissionMode
+  if (preferred) return preferred
   return previous && previous !== 'bypassPermissions' ? previous : 'auto'
+}
+
+function classifierOf(providers: ProviderInfo[], provider: Provider, wanted: string): string | null {
+  const list = providers.find((p) => p.id === provider)?.classifierModels
+  if (!list?.length) return null
+  return list.includes(wanted) ? wanted : list[0]
 }
 
 function prettyModel(model: string) {
@@ -621,6 +632,7 @@ function Composer(p: {
   classifierModel: string | null
   mode: PermissionMode
   models: ModelOption[]
+  providers: ProviderInfo[]
   onModel: (m: ModelOption) => void
   onEffort: (e: EffortLevel) => void
   onClassifier: (model: string) => void
@@ -762,6 +774,7 @@ function Composer(p: {
       {sheet === 'model' && (
         <ModelSheet
           models={p.models}
+          providers={p.providers}
           provider={p.provider}
           model={p.model}
           effort={p.effort}
@@ -777,6 +790,7 @@ function Composer(p: {
 }
 
 function SessionMenu({ state, onClose, onState }: { state: SessionState; onClose: () => void; onState: (s: SessionState) => void }) {
+  const { sessionActions } = usePlugins()
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(state.title)
   if (renaming)
@@ -835,6 +849,24 @@ function SessionMenu({ state, onClose, onState }: { state: SessionState; onClose
           <span className="grow">刷新</span>
         </button>
       )}
+      {sessionActions.map((a, i) => (
+        <PluginBoundary key={`${a.pluginId}:${i}`} pluginId={a.pluginId} fallback={null}>
+          <button
+            className="row-btn"
+            onClick={async () => {
+              onClose()
+              try {
+                await a.run(state)
+              } catch (e: any) {
+                toast(e?.message ?? '操作失败')
+              }
+            }}
+          >
+            {a.icon ?? <Puzzle size={19} strokeWidth={1.6} />}
+            <span className="grow">{a.label}</span>
+          </button>
+        </PluginBoundary>
+      ))}
     </Sheet>
   )
 }

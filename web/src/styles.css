@@ -1558,6 +1558,11 @@ textarea {
 
 .segmented button {
   flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   height: 32px;
   border-radius: 9px;
   font-size: 14.5px;
@@ -1585,29 +1590,55 @@ textarea {
   outline: 0;
 }
 
-/* ---------- settings: DeepSeek ---------- */
+/* ---------- settings: plugins ---------- */
 
 a.option {
   color: inherit;
   text-decoration: none;
 }
 
-.option .hint.mono {
-  font-family: var(--mono);
-  font-size: 13px;
-  letter-spacing: 0;
-}
-
-.option .danger {
+.option .danger,
+.option .desc.danger {
   color: var(--red);
 }
 
-.group + .key-form,
-.key-form + .group {
+.option > button.plain {
+  text-align: left;
+  font: inherit;
+  padding: 0;
+  align-self: stretch;
+}
+
+.row-btn + .plugin-form,
+.group + .plugin-form,
+.plugin-form + .group,
+.row-btn + .notice,
+.notice + .group,
+.notice + .plugin-form,
+.group + .plugin-panel,
+.plugin-form + .plugin-panel,
+.row-btn + .plugin-panel {
   margin-top: 16px;
 }
 
-.key-form .path-input {
+.plugin-error {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+}
+
+.plugin-form .path-input {
+  margin-bottom: 10px;
+}
+
+.plugin-form .path-input.plain {
+  font-family: var(--font);
+}
+
+.plugin-form .group {
+  margin-bottom: 10px;
+}
+
+.plugin-form .row-btn {
   margin-bottom: 10px;
 }
 
@@ -1619,7 +1650,7 @@ a.option {
   box-shadow: none;
 }
 
-.key-form .err {
+.plugin-form .err {
   margin: 10px 4px 0;
   font-size: 13.5px;
   color: var(--red);

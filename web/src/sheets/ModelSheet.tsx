@@ -1,6 +1,6 @@
 import { Check, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
-import type { EffortLevel, ModelOption, Provider } from '../../../shared/types.ts'
+import type { EffortLevel, ModelOption, Provider, ProviderInfo } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
 
 export const EFFORT_LABELS: Record<EffortLevel, string> = {
@@ -13,13 +13,9 @@ export const EFFORT_LABELS: Record<EffortLevel, string> = {
 
 const EFFORT_ORDER: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-const PROVIDERS: { value: Provider; label: string }[] = [
-  { value: 'claude', label: 'Claude' },
-  { value: 'deepseek', label: 'DeepSeek' },
-]
-
 interface Props {
   models: ModelOption[]
+  providers: ProviderInfo[]
   provider: Provider
   model: string
   effort: EffortLevel | null
@@ -37,12 +33,15 @@ export function isCurrent(m: ModelOption, provider: Provider, model: string) {
 export function ModelSheet(p: Props) {
   const [tab, setTab] = useState<Provider>(p.provider)
   const [view, setView] = useState<'main' | 'effort' | 'more' | 'classifier'>('main')
-  const available = PROVIDERS.filter((pv) => p.models.some((m) => m.provider === pv.value))
+  const available = p.providers.filter((pv) => p.models.some((m) => m.provider === pv.id))
   const inTab = p.models.filter((m) => m.provider === tab)
   const main = inTab.filter((m) => !m.more)
   const more = inTab.filter((m) => m.more)
   const current = p.models.find((m) => isCurrent(m, p.provider, p.model))
-  const deepseek = p.models.filter((m) => m.provider === 'deepseek')
+  // Models the current provider's auto-mode classifier may run on.
+  const classifiers = (p.providers.find((pv) => pv.id === p.provider)?.classifierModels ?? [])
+    .map((v) => p.models.find((m) => m.provider === p.provider && m.value === v))
+    .filter((m) => !!m)
 
   const pick = (m: ModelOption) => {
     p.onModel(m)
@@ -85,7 +84,7 @@ export function ModelSheet(p: Props) {
     return (
       <Sheet title="自动模式判断" onClose={p.onClose} onBack={() => setView('main')}>
         <div className="group">
-          {deepseek.map((m) => (
+          {classifiers.map((m) => (
             <button
               className="option"
               key={m.value}
@@ -95,7 +94,7 @@ export function ModelSheet(p: Props) {
               }}
             >
               <span className="grow">{m.label}</span>
-              {(p.classifierModel ?? 'deepseek-flash') === m.value && check}
+              {p.classifierModel === m.value && check}
             </button>
           ))}
         </div>
@@ -109,14 +108,14 @@ export function ModelSheet(p: Props) {
       </Sheet>
     )
 
-  const classifierLabel = deepseek.find((m) => m.value === (p.classifierModel ?? 'deepseek-flash'))?.label
+  const classifierLabel = classifiers.find((m) => m.value === p.classifierModel)?.label
 
   return (
     <Sheet title="选择模型" onClose={p.onClose}>
       {available.length > 1 && (
         <div className="segmented">
           {available.map((pv) => (
-            <button key={pv.value} className={tab === pv.value ? 'on' : undefined} onClick={() => setTab(pv.value)}>
+            <button key={pv.id} className={tab === pv.id ? 'on' : undefined} onClick={() => setTab(pv.id)}>
               {pv.label}
             </button>
           ))}
@@ -130,7 +129,7 @@ export function ModelSheet(p: Props) {
           <ChevronRight size={18} color="var(--text-2)" />
         </button>
       )}
-      {tab === 'deepseek' && p.provider === 'deepseek' && (
+      {tab === p.provider && classifiers.length > 1 && (
         <button className="row-btn" style={{ marginTop: 14 }} onClick={() => setView('classifier')}>
           <span className="grow">自动模式判断</span>
           <span className="value">{classifierLabel}</span>

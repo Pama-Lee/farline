@@ -1,0 +1,13 @@
+{
+  "name": "farline-plugin-wecom",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "farline": {
+    "id": "wecom",
+    "name": "企业微信",
+    "apiVersion": 1,
+    "server": "./server.ts",
+    "enabledByDefault": false
+  }
+}

@@ -782,11 +782,32 @@ function Composer(p: {
   const ta = useRef<HTMLTextAreaElement>(null)
   const dictation = useDictation((t) => setText((cur) => (cur ? `${cur}${t}` : t)))
 
+  // Grow with the text; scroll only past the cap. Measured again when the
+  // box changes width or a skin changes its padding.
   useLayoutEffect(() => {
     const el = ta.current
     if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.38)}px`
+    const fit = () => {
+      el.style.height = 'auto'
+      const max = window.innerHeight * 0.38
+      el.style.height = `${Math.min(el.scrollHeight, max)}px`
+      el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden'
+    }
+    fit()
+    let w = el.clientWidth
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth !== w) {
+        w = el.clientWidth
+        fit()
+      }
+    })
+    ro.observe(el)
+    const onStyles = () => requestAnimationFrame(fit)
+    document.addEventListener('load', onStyles, true)
+    return () => {
+      ro.disconnect()
+      document.removeEventListener('load', onStyles, true)
+    }
   }, [text])
 
   useEffect(() => {

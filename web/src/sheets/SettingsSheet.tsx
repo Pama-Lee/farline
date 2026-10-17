@@ -79,7 +79,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
     const p = plugins?.find((x) => x.id === view.id)
     if (p)
       return (
-        <Sheet title={p.name} onClose={onClose} onBack={() => setView(view.back === 'main' ? { name: 'main' } : { name: 'plugins' })} size={p.settings.length > 2 ? 'tall' : 'auto'}>
+        <Sheet title={p.name} onClose={onClose} onBack={() => setView(view.back === 'main' ? { name: 'main' } : { name: 'plugins' })} size={p.settings.length > 2 || settingsPanels.some((x) => x.pluginId === p.id) ? 'tall' : 'auto'}>
           <PluginDetail info={p} status={statuses[p.id]} onToggle={() => void toggle(p)} onChange={changed} />
         </Sheet>
       )

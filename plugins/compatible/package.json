@@ -1,13 +1,13 @@
 {
   "name": "farline-plugin-compatible",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "farline": {
     "id": "compatible",
-    "name": "兼容接口",
+    "name": "自定义提供商",
     "apiVersion": 1,
     "server": "./server.ts",
-    "enabledByDefault": false
+    "web": "./web.js"
   }
 }

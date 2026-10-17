@@ -7,6 +7,7 @@ import type { PluginInfo } from '../../../shared/types.ts'
 import { Markdown } from '../components/Markdown.tsx'
 import { Sheet } from '../components/Sheet.tsx'
 import { Spinner, toast } from '../components/bits.tsx'
+import { CATALOG_CHANGED } from '../lib/api.ts'
 import { navigate } from '../lib/router.ts'
 import type { FarlineApp, SessionAction, ToolRendererProps, WebPlugin } from './types.ts'
 
@@ -75,6 +76,7 @@ function makeApp(id: string, cleanups: (() => void)[]): FarlineApp {
     registerToolRenderer: (match, component) => keep(add('toolRenderers', { pluginId: id, match: matcher(match), component })),
     registerSessionAction: (action) => keep(add('sessionActions', { ...action, pluginId: id })),
     registerSettingsPanel: (component) => keep(add('settingsPanels', { pluginId: id, component })),
+    refreshCatalog: () => window.dispatchEvent(new Event(CATALOG_CHANGED)),
   }
 }
 

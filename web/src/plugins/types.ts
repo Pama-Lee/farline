@@ -36,6 +36,8 @@ export interface FarlineApp {
   registerSessionAction(action: SessionAction): () => void
   // Shown on the plugin's settings page, under the generated fields.
   registerSettingsPanel(component: ComponentType): () => void
+  // Reload providers and models after the plugin changed them.
+  refreshCatalog(): void
 }
 
 export interface WebPlugin {

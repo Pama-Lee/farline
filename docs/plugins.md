@@ -239,6 +239,7 @@ npx esbuild src/web.tsx --bundle --format=esm --jsx=automatic --external:react -
 | `app.registerToolRenderer(match, Component)` | 替换匹配工具的详情显示。`match` 可以是工具名、工具名数组或函数；组件拿到 `{ tool, sessionId }` |
 | `app.registerSessionAction({ label, icon, run })` | 在会话的「…」菜单里加一行，`run(session)` 抛出的错误会提示给用户 |
 | `app.registerSettingsPanel(Component)` | 显示在插件设置页，自动生成的设置项下面 |
+| `app.refreshCatalog()` | 插件改了提供商或模型后，让界面重新读取 |
 
 每个 `register*` 返回一个撤销函数。插件组件出错时只影响它自己：工具显示退回默认样式，其他位置显示一行错误。
 
@@ -273,5 +274,5 @@ npx esbuild src/web.tsx --bundle --format=esm --jsx=automatic --external:react -
 | id | 名称 | 默认 | |
 | --- | --- | --- | --- |
 | `deepseek` | DeepSeek | 启用 | V4 Pro / V4.1 Flash，100 万上下文，显示余额；回退 `DEEPSEEK_API_KEY` |
-| `compatible` | 兼容接口 | 停用 | 填地址、key 和模型名，接任意 Anthropic 兼容接口 |
+| `compatible` | 自定义提供商 | 启用 | 在设置里自己添加任意多个 Anthropic 兼容接口（中转、代理、别家模型），可测试连接、拉取模型列表 |
 | `wecom` | 企业微信 | 停用 | 通知发到企业微信群机器人 |

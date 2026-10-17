@@ -13,7 +13,7 @@
 - 消息里提到的文件和目录可以点开：电脑上在左侧查看，手机上全屏；代码高亮带行号，Markdown 可预览
 - 切模型、思考强度、权限模式，中途可改
 - 模型可选 Anthropic 或 DeepSeek（V4 Pro / Flash，100 万上下文，自动模式的判断也由 DeepSeek 完成）。DeepSeek 的 API key 在设置页填，能看余额
-- 插件：接新的模型提供商、通知渠道、会话钩子，扩展界面、换皮肤，见 [docs/plugins.md](docs/plugins.md)。内置企业微信通知和任意 Anthropic 兼容接口
+- 插件：接新的模型提供商、通知渠道、会话钩子，扩展界面、换皮肤，见 [docs/plugins.md](docs/plugins.md)。内置企业微信通知；设置里可以自己添加任意 Anthropic 兼容接口作为模型提供商
 - 手机装成 PWA；电脑上是侧栏 + 对话的布局，回车发送
 - 单密码登录
 

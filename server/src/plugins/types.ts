@@ -5,16 +5,21 @@
 import type { Hono } from 'hono'
 import type { PermissionMode, PluginStatus, SessionState, SettingType } from '../../../shared/types.ts'
 
+// Text shown to people: one string, or one per language, e.g.
+// { en: 'Balance', 'zh-CN': '余额' }. The page's language is picked, then
+// English, then whatever there is.
+export type Text = string | Partial<Record<string, string>>
+
 export interface Disposable {
   dispose(): void
 }
 
 export interface SettingField {
   key: string
-  label: string
+  label: Text
   type: SettingType
-  placeholder?: string
-  options?: { value: string; label: string }[]
+  placeholder?: Text
+  options?: { value: string; label: Text }[]
   default?: string | number | boolean
   // Fall back to this environment variable when nothing is saved. It is also
   // kept out of the environment of agent processes.
@@ -27,15 +32,29 @@ export interface PluginDefinition {
   settings?: SettingField[]
   // Throw an Error with a user-facing message to refuse the values. Receives
   // the values as they would be after saving, env fallbacks included.
-  validateSettings?(values: SettingValues): Promise<void> | void
+  validateSettings?(values: SettingValues, i18n: Localizer): Promise<void> | void
   // Only asked while the plugin is enabled.
-  status?(ctx: PluginContext): Promise<PluginStatus> | PluginStatus
-  links?: { label: string; url: string }[]
+  status?(ctx: PluginContext): Promise<StatusReport> | StatusReport
+  links?: { label: Text; url: string }[]
   activate(ctx: PluginContext): Promise<void> | void
   deactivate?(): Promise<void> | void
 }
 
-export interface PluginContext {
+export interface Localizer {
+  locale(): string
+  t(text: Text): string
+}
+
+export interface StatusReport {
+  summary?: Text
+  tone?: PluginStatus['tone']
+  rows?: { label: Text; value: Text; tone?: 'danger' }[]
+}
+
+// locale(): the language of the request being handled (or the owner's usual
+// one), e.g. 'en' or 'zh-CN'. t(): pick the right string for it. Use them for
+// errors you throw and text you build.
+export interface PluginContext extends Localizer {
   readonly id: string
   // Private directory for the plugin's own files, created on first use.
   readonly dataDir: string
@@ -65,15 +84,15 @@ export interface PluginContext {
 
 export interface ProviderModel {
   value: string
-  label: string
-  desc?: string
-  // Listed under "更多模型".
+  label: Text
+  desc?: Text
+  // Listed under "More models".
   more?: boolean
 }
 
 export interface ProviderDefinition {
   id: string
-  label: string
+  label: Text
   // False hides the provider, e.g. while no API key is set.
   available(): boolean
   models(): ProviderModel[]
@@ -108,7 +127,7 @@ export interface Notification {
 
 export interface ChannelDefinition {
   id: string
-  label: string
+  label: Text
   send(n: Notification): Promise<void>
 }
 

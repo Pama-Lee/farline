@@ -9,14 +9,14 @@ export function activate(app) {
   app.registerSettingsPanel(function Stats() {
     const [s, setS] = useState(null)
     useEffect(() => void stats().then(setS), [])
-    return h('div', { className: 'group' }, h('div', { className: 'option' }, h('span', { className: 'grow' }, '完成的轮次'), h('span', { className: 'hint' }, s ? String(s.turns) : '…')))
+    return h('div', { className: 'group' }, h('div', { className: 'option' }, h('span', { className: 'grow' }, app.t({ en: 'Turns completed', 'zh-CN': '完成的轮次' })), h('span', { className: 'hint' }, s ? String(s.turns) : '…')))
   })
 
   app.registerSessionAction({
-    label: '打个招呼',
+    label: { en: 'Say hello', 'zh-CN': '打个招呼' },
     async run(session) {
       const s = await stats()
-      app.toast(`${s.greeting}，${session.title}`)
+      app.toast(`${s.greeting}, ${session.title}`)
     },
   })
 

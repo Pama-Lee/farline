@@ -40,7 +40,7 @@ async function generate(prompt: string): Promise<string | undefined> {
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), 45_000)
   const q = query({
-    prompt: `为下面这条请求起一个会话标题。只输出标题本身：中文为主，4 到 14 个字，概括要做的事，不要引号和句号。\n\n${prompt.slice(0, 800)}`,
+    prompt: `Write a short title for a work session that starts with the request below. Use the language the request is written in. 2 to 6 words (4 to 14 characters for Chinese or Japanese), naming what is to be done. Output only the title, with no quotes and no final period.\n\n${prompt.slice(0, 800)}`,
     options: {
       model: 'haiku',
       cwd: config.defaultCwd,

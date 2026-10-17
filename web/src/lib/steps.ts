@@ -1,6 +1,7 @@
-// Turns the flat item list into render blocks and gives tool calls the
-// Chinese labels the Claude app uses ("已运行", "已搜索网页"...).
+// Turns the flat item list into render blocks and gives tool calls short
+// labels ("Ran", "Searched the web"...).
 import type { Item } from '../../../shared/types.ts'
+import { t } from '../i18n.ts'
 
 export type StepItem = Extract<Item, { kind: 'tool' } | { kind: 'thinking' }>
 
@@ -67,58 +68,48 @@ function fileName(p: string) {
 }
 
 export function stepLabel(s: StepItem): { l1: string; l2: string } {
-  if (s.kind === 'thinking') return { l1: s.streaming ? '正在思考' : '已思考', l2: s.text.replace(/\s+/g, ' ').slice(0, 80) }
+  if (s.kind === 'thinking') return { l1: t(s.streaming ? 'step.thinking' : 'step.thought'), l2: s.text.replace(/\s+/g, ' ').slice(0, 80) }
   const i = s.input
   const done = s.status !== 'running'
-  if (s.taskId) return { l1: s.name === 'Monitor' ? '已开始监控' : '已转入后台', l2: str(i.description) || str(i.command) || str(i.prompt) }
+  if (s.taskId) return { l1: t(s.name === 'Monitor' ? 'step.monitorStarted' : 'step.backgrounded'), l2: str(i.description) || str(i.command) || str(i.prompt) }
   switch (s.name) {
     case 'Bash':
-      return { l1: done ? '已运行' : '正在运行', l2: str(i.description) || str(i.command) }
+      return { l1: t(done ? 'step.ran' : 'step.running'), l2: str(i.description) || str(i.command) }
     case 'WebSearch':
-      return { l1: done ? '已搜索网页' : '正在搜索网页', l2: str(i.query) }
+      return { l1: t(done ? 'step.searchedWeb' : 'step.searchingWeb'), l2: str(i.query) }
     case 'WebFetch':
-      return { l1: done ? '已打开网页' : '正在打开网页', l2: str(i.url) }
+      return { l1: t(done ? 'step.fetched' : 'step.fetching'), l2: str(i.url) }
     case 'Read':
-      return { l1: done ? '已读取' : '正在读取', l2: fileName(str(i.file_path)) }
+      return { l1: t(done ? 'step.read' : 'step.reading'), l2: fileName(str(i.file_path)) }
     case 'Edit':
     case 'MultiEdit':
-      return { l1: done ? '已编辑' : '正在编辑', l2: fileName(str(i.file_path)) }
+      return { l1: t(done ? 'step.edited' : 'step.editing'), l2: fileName(str(i.file_path)) }
     case 'Write':
-      return { l1: done ? '已写入' : '正在写入', l2: fileName(str(i.file_path)) }
+      return { l1: t(done ? 'step.wrote' : 'step.writing'), l2: fileName(str(i.file_path)) }
     case 'NotebookEdit':
-      return { l1: done ? '已编辑' : '正在编辑', l2: fileName(str(i.notebook_path)) }
+      return { l1: t(done ? 'step.edited' : 'step.editing'), l2: fileName(str(i.notebook_path)) }
     case 'Grep':
-      return { l1: done ? '已搜索代码' : '正在搜索代码', l2: str(i.pattern) }
+      return { l1: t(done ? 'step.searchedCode' : 'step.searchingCode'), l2: str(i.pattern) }
     case 'Glob':
-      return { l1: done ? '已查找文件' : '正在查找文件', l2: str(i.pattern) }
+      return { l1: t(done ? 'step.foundFiles' : 'step.findingFiles'), l2: str(i.pattern) }
     case 'Agent':
     case 'Task':
-      return { l1: done ? '子任务已完成' : '子任务进行中', l2: str(i.description) }
+      return { l1: t(done ? 'step.subtaskDone' : 'step.subtaskRunning'), l2: str(i.description) }
     case 'TodoWrite':
-      return { l1: '已更新待办', l2: Array.isArray(i.todos) ? `${i.todos.length} 项` : '' }
+      return { l1: t('step.updatedTodos'), l2: Array.isArray(i.todos) ? t('step.todoCount', { n: i.todos.length }) : '' }
     case 'Skill':
-      return { l1: '已使用技能', l2: str(i.skill) || str(i.command) }
+      return { l1: t('step.usedSkill'), l2: str(i.skill) || str(i.command) }
     case 'ToolSearch':
-      return { l1: '已加载工具', l2: str(i.query) }
+      return { l1: t('step.loadedTools'), l2: str(i.query) }
     default: {
       const mcp = s.name.match(/^mcp__(.+?)__(.+)$/)
-      if (mcp) return { l1: done ? `已调用 ${mcp[1].replace(/^claude_ai_/, '')}` : `正在调用 ${mcp[1].replace(/^claude_ai_/, '')}`, l2: mcp[2] }
-      return { l1: done ? `已调用 ${s.name}` : `正在调用 ${s.name}`, l2: '' }
+      if (mcp) return { l1: t(done ? 'step.called' : 'step.calling', { name: mcp[1].replace(/^claude_ai_/, '') }), l2: mcp[2] }
+      return { l1: t(done ? 'step.called' : 'step.calling', { name: s.name }), l2: '' }
     }
   }
 }
 
-const SUMMARY: Record<Category, (n: number) => string> = {
-  web: () => '已浏览网页',
-  bash: (n) => `运行了 ${n} 条命令`,
-  read: (n) => `读取了 ${n} 个文件`,
-  edit: (n) => `编辑了 ${n} 个文件`,
-  search: () => '搜索了代码',
-  agent: (n) => `完成了 ${n} 个子任务`,
-  think: () => '已思考',
-  todo: () => '更新了待办',
-  other: (n) => `调用了 ${n} 个工具`,
-}
+const SUMMARY = (c: Category, n: number) => t(`steps.${c}`, { n })
 
 export function stepsSummary(items: StepItem[]): string {
   const counts = new Map<Category, number>()
@@ -130,7 +121,7 @@ export function stepsSummary(items: StepItem[]): string {
   if (counts.has('edit')) counts.set('edit', edited.size || 1)
   // Thinking only shows up in the summary when nothing else happened.
   if (counts.size > 1) counts.delete('think')
-  return [...counts.entries()].map(([c, n]) => SUMMARY[c](n)).join(', ')
+  return t('common.list', { items: [...counts.entries()].map(([c, n]) => SUMMARY(c, n)) })
 }
 
 export function runningStep(items: StepItem[]): StepItem | undefined {

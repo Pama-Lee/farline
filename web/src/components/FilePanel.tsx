@@ -8,6 +8,7 @@ import { FileLinkContext, closeFiles, popFile, pushFile, useFiles } from '../lib
 import { basename, copyText, shortPath } from '../lib/format.ts'
 import { Markdown, highlight } from './Markdown.tsx'
 import { Spinner, toast } from './bits.tsx'
+import { t } from '../i18n.ts'
 
 const LINE_H = 20
 // Highlighting very large files freezes the page; show them plain.
@@ -64,10 +65,10 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
   const canGoBack = st.stack.length > 1
 
   return (
-    <aside className={desktop ? 'file-panel' : 'file-full'} role="dialog" aria-label="文件">
+    <aside className={desktop ? 'file-panel' : 'file-full'} role="dialog" aria-label={t('file.title')}>
       <div className="fp-head">
         {canGoBack || !desktop ? (
-          <button className="fp-btn" onClick={canGoBack ? popFile : closeFiles} aria-label="返回" title="返回">
+          <button className="fp-btn" onClick={canGoBack ? popFile : closeFiles} aria-label={t('common.back')} title={t('common.back')}>
             <ChevronLeft size={22} strokeWidth={1.8} />
           </button>
         ) : null}
@@ -78,7 +79,7 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
           </div>
         </div>
         {isMd && (
-          <button className={`fp-toggle${source ? ' on' : ''}`} onClick={() => setSource((v) => !v)} title={source ? '预览' : '源码'}>
+          <button className={`fp-toggle${source ? ' on' : ''}`} onClick={() => setSource((v) => !v)} title={source ? t('file.preview') : t('file.source')}>
             <FileCode2 size={18} strokeWidth={1.7} />
           </button>
         )}
@@ -86,20 +87,20 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
           className="fp-btn"
           onClick={async () => {
             await copyText(cur.path)
-            toast('已复制路径')
+            toast(t('file.pathCopied'))
           }}
-          aria-label="复制路径"
-          title="复制路径"
+          aria-label={t('file.copyPath')}
+          title={t('file.copyPath')}
         >
           <Copy size={17} strokeWidth={1.7} />
         </button>
         {file && file.kind !== 'dir' && (
-          <a className="fp-btn" href={rawUrl(cur.path, true)} aria-label="下载" title="下载">
+          <a className="fp-btn" href={rawUrl(cur.path, true)} aria-label={t('common.download')} title={t('common.download')}>
             <Download size={18} strokeWidth={1.7} />
           </a>
         )}
         {desktop && (
-          <button className="fp-btn" onClick={closeFiles} aria-label="关闭" title="关闭">
+          <button className="fp-btn" onClick={closeFiles} aria-label={t('common.close')} title={t('common.close')}>
             <X size={20} strokeWidth={1.7} />
           </button>
         )}
@@ -111,7 +112,7 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
             <Spinner />
           </div>
         )}
-        {data === 'missing' && <div className="empty">找不到这个文件</div>}
+        {data === 'missing' && <div className="empty">{t('file.notFound')}</div>}
         {file?.kind === 'dir' && <DirView dir={file} />}
         {file?.kind === 'image' && (
           <div className="fp-image">
@@ -120,9 +121,9 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
         )}
         {file?.kind === 'binary' && (
           <div className="empty">
-            无法预览这个文件
+            {t('file.cantPreview')}
             <a className="fp-download" href={rawUrl(file.path, true)}>
-              下载 · {size(file.size)}
+              {t('file.downloadSize', { size: size(file.size) })}
             </a>
           </div>
         )}
@@ -136,7 +137,7 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
           ) : (
             <CodeView text={file.text ?? ''} path={file.path} line={cur.line} />
           ))}
-        {file?.truncated && <div className="fp-note">文件较大，只显示了开头 {size(file.text?.length ?? 0)}</div>}
+        {file?.truncated && <div className="fp-note">{t('file.truncated', { size: size(file.text?.length ?? 0) })}</div>}
       </div>
     </aside>
   )
@@ -144,7 +145,7 @@ export function FilePanel({ desktop }: { desktop: boolean }) {
 
 function DirView({ dir }: { dir: FileRead }) {
   const entries = dir.entries ?? []
-  if (!entries.length) return <div className="empty">空文件夹</div>
+  if (!entries.length) return <div className="empty">{t('file.emptyFolder')}</div>
   return (
     <div className="fp-list">
       {entries.map((e) => (

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from './bits.tsx'
 import { copyText } from '../lib/format.ts'
+import { t } from '../i18n.ts'
 
 interface Sel {
   itemId: string
@@ -49,11 +50,11 @@ export function SelectionMenu({ enabled, onEdit }: { enabled: boolean; onEdit: (
       <button
         onClick={async () => {
           await copyText(sel.text)
-          toast('已复制')
+          toast(t('common.copied'))
           setSel(null)
         }}
       >
-        复制
+        {t('common.copy')}
       </button>
       <button
         onClick={() => {
@@ -62,7 +63,7 @@ export function SelectionMenu({ enabled, onEdit }: { enabled: boolean; onEdit: (
           setSel(null)
         }}
       >
-        编辑
+        {t('common.edit')}
       </button>
     </div>,
     document.body,

@@ -23,7 +23,7 @@ interface State {
   // Generated titles for sessions created elsewhere (Claude app, terminal).
   titles: Record<string, string>
   pushSubs: PushSub[]
-  prefs: { lastCwd?: string; provider?: Provider; model?: string; permissionMode?: PermissionMode; effort?: EffortLevel; classifierModel?: string }
+  prefs: { lang?: string; lastCwd?: string; provider?: Provider; model?: string; permissionMode?: PermissionMode; effort?: EffortLevel; classifierModel?: string }
 }
 
 export interface PushSub {

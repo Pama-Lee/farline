@@ -2,6 +2,7 @@
 // (tool calls that went to the background, their notifications) merged with
 // the live state of the running process.
 import type { BackgroundTask, Item, TaskEndStatus } from '../../../shared/types.ts'
+import { labelMap, t } from '../i18n.ts'
 
 export interface TaskView {
   id: string
@@ -22,21 +23,9 @@ export interface TaskView {
 
 const TOOL_TYPES: Record<string, string> = { Bash: 'local_bash', Agent: 'local_agent', Task: 'local_agent', Monitor: 'monitor' }
 
-export const TYPE_LABELS: Record<string, string> = {
-  local_bash: '命令',
-  local_agent: '子代理',
-  monitor: '监控',
-  local_workflow: '工作流',
-  mcp_task: 'MCP',
-}
+export const TYPE_LABELS = labelMap<string>('task.type.', { mcp_task: 'MCP' })
 
-export const STATUS_LABELS: Record<TaskView['status'], string> = {
-  running: '运行中',
-  completed: '已完成',
-  failed: '失败',
-  stopped: '已停止',
-  ended: '已结束',
-}
+export const STATUS_LABELS = labelMap<TaskView['status']>('task.status.')
 
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
 
@@ -92,9 +81,5 @@ export function collectTasks(items: Item[], live: BackgroundTask[]): TaskView[] 
 }
 
 export function duration(ms: number): string {
-  const s = Math.max(0, Math.round(ms / 1000))
-  if (s < 60) return `${s} 秒`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m} 分 ${s % 60} 秒`
-  return `${Math.floor(m / 60)} 小时 ${m % 60} 分`
+  return t('time.duration', { secs: Math.max(0, Math.round(ms / 1000)) })
 }

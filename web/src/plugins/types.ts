@@ -13,8 +13,11 @@ export interface ToolRendererProps {
   sessionId: string | null
 }
 
+// One string, or one per language: { en: 'Share', 'zh-CN': '分享' }.
+export type Text = string | Partial<Record<string, string>>
+
 export interface SessionAction {
-  label: string
+  label: Text
   icon?: ReactNode
   run(session: SessionState): unknown
 }
@@ -38,6 +41,11 @@ export interface FarlineApp {
   registerSettingsPanel(component: ComponentType): () => void
   // Reload providers and models after the plugin changed them.
   refreshCatalog(): void
+  // The page's language, e.g. 'en' or 'zh-CN'. The page re-renders when it
+  // changes, so read it during render.
+  readonly locale: string
+  // Pick the right string: t({ en: 'Save', 'zh-CN': '保存' }).
+  t(text: Text): string
 }
 
 export interface WebPlugin {

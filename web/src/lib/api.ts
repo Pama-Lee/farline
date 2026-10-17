@@ -17,6 +17,7 @@ import type {
   SessionSummary,
   Upload,
 } from '../../../shared/types.ts'
+import { locale, t } from '../i18n.ts'
 
 // Plugins or settings changed what providers and plugin code are available.
 export const CATALOG_CHANGED = 'farline:catalog'
@@ -35,7 +36,7 @@ export function setUnauthorizedHandler(fn: () => void) {
 }
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const init: RequestInit = { method, headers: { 'x-farline': '1' }, credentials: 'same-origin' }
+  const init: RequestInit = { method, headers: { 'x-farline': '1', 'x-farline-lang': locale() }, credentials: 'same-origin' }
   if (body instanceof FormData) init.body = body
   else if (body !== undefined) {
     init.body = JSON.stringify(body)
@@ -44,7 +45,7 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
   const res = await fetch(`/api${path}`, init)
   if (res.status === 401 && path !== '/login') onUnauthorized()
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new ApiError(res.status, data.error ?? `请求失败 (${res.status})`)
+  if (!res.ok) throw new ApiError(res.status, data.error ?? t('common.requestFailed', { status: res.status }))
   return data as T
 }
 

@@ -253,11 +253,11 @@
   background: transparent;
 }
 
-:root:not([data-skin]) .sheet-head .circle-btn[aria-label='返回'] {
+:root:not([data-skin]) .sheet-head .circle-btn[data-role='back'] {
   margin-left: -10px;
 }
 
-:root:not([data-skin]) .sheet-head .circle-btn[aria-label='关闭'] {
+:root:not([data-skin]) .sheet-head .circle-btn[data-role='close'] {
   order: 3;
 }
 

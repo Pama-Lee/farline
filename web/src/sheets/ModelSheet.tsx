@@ -2,14 +2,9 @@ import { Check, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import type { EffortLevel, ModelOption, Provider, ProviderInfo } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
+import { labelMap, t } from '../i18n.ts'
 
-export const EFFORT_LABELS: Record<EffortLevel, string> = {
-  low: '低',
-  medium: '中',
-  high: '高',
-  xhigh: '超高',
-  max: '最大',
-}
+export const EFFORT_LABELS = labelMap<EffortLevel>('effort.')
 
 export const EFFORT_ORDER: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
@@ -61,7 +56,7 @@ export function ModelSheet(p: ModelPickerProps) {
 
   if (view === 'effort')
     return (
-      <Sheet title="思考强度" onClose={p.onClose} onBack={() => setView('main')}>
+      <Sheet title={t('model.effort')} onClose={p.onClose} onBack={() => setView('main')}>
         <div className="group">
           {(current?.efforts ?? EFFORT_ORDER).map((e) => (
             <button
@@ -82,7 +77,7 @@ export function ModelSheet(p: ModelPickerProps) {
 
   if (view === 'classifier')
     return (
-      <Sheet title="自动模式判断" onClose={p.onClose} onBack={() => setView('main')}>
+      <Sheet title={t('model.classifier')} onClose={p.onClose} onBack={() => setView('main')}>
         <div className="group">
           {classifiers.map((m) => (
             <button
@@ -103,7 +98,7 @@ export function ModelSheet(p: ModelPickerProps) {
 
   if (view === 'more')
     return (
-      <Sheet title="更多模型" onClose={p.onClose} onBack={() => setView('main')}>
+      <Sheet title={t('model.more')} onClose={p.onClose} onBack={() => setView('main')}>
         <div className="group">{more.map(row)}</div>
       </Sheet>
     )
@@ -111,7 +106,7 @@ export function ModelSheet(p: ModelPickerProps) {
   const classifierLabel = classifiers.find((m) => m.value === p.classifierModel)?.label
 
   return (
-    <Sheet title="选择模型" onClose={p.onClose}>
+    <Sheet title={t('model.choose')} onClose={p.onClose}>
       {available.length > 1 && (
         <div className="segmented">
           {available.map((pv) => (
@@ -124,21 +119,21 @@ export function ModelSheet(p: ModelPickerProps) {
       {main.length > 0 && <div className="group">{main.map(row)}</div>}
       {tab === 'claude' && p.provider === 'claude' && p.effort && current?.efforts && (
         <button className="row-btn" style={{ marginTop: 14 }} onClick={() => setView('effort')}>
-          <span className="grow">思考强度</span>
+          <span className="grow">{t('model.effort')}</span>
           <span className="value">{EFFORT_LABELS[p.effort]}</span>
           <ChevronRight size={18} color="var(--text-2)" />
         </button>
       )}
       {tab === p.provider && classifiers.length > 1 && (
         <button className="row-btn" style={{ marginTop: 14 }} onClick={() => setView('classifier')}>
-          <span className="grow">自动模式判断</span>
+          <span className="grow">{t('model.classifier')}</span>
           <span className="value">{classifierLabel}</span>
           <ChevronRight size={18} color="var(--text-2)" />
         </button>
       )}
       {more.length > 0 && (
         <button className="row-btn" style={{ marginTop: 14 }} onClick={() => setView('more')}>
-          <span className="grow">更多模型</span>
+          <span className="grow">{t('model.more')}</span>
           {current?.more && current.provider === tab && <span className="value">{current.label}</span>}
           <ChevronRight size={18} color="var(--text-2)" />
         </button>

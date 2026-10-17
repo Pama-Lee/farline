@@ -1,10 +1,11 @@
 import { ChevronLeft, ChevronRight, ExternalLink, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { closeViewer, setViewerIndex, stepViewer, useViewer } from '../lib/viewer.ts'
+import { t } from '../i18n.ts'
 
 function nameOf(url: string, name?: string) {
   if (name) return name.split('/').pop() || name
-  return '图片'
+  return t('common.image')
 }
 
 export function ImageViewer({ desktop }: { desktop: boolean }) {
@@ -32,16 +33,16 @@ export function ImageViewer({ desktop }: { desktop: boolean }) {
 
   if (desktop)
     return (
-      <aside className="viewer-panel" role="dialog" aria-label="图片">
+      <aside className="viewer-panel" role="dialog" aria-label={t('common.image')}>
         <div className="vp-head">
           <span className="vp-title" title={img.name}>
             {nameOf(img.url, img.name)}
             {many && <span className="vp-count">{` ${s.index + 1} / ${s.images.length}`}</span>}
           </span>
-          <a className="vp-btn" href={img.url} target="_blank" rel="noreferrer" aria-label="新标签页打开" title="新标签页打开">
+          <a className="vp-btn" href={img.url} target="_blank" rel="noreferrer" aria-label={t('file.openInNewTab')} title={t('file.openInNewTab')}>
             <ExternalLink size={18} strokeWidth={1.7} />
           </a>
-          <button className="vp-btn" onClick={closeViewer} aria-label="关闭" title="关闭">
+          <button className="vp-btn" onClick={closeViewer} aria-label={t('common.close')} title={t('common.close')}>
             <X size={20} strokeWidth={1.7} />
           </button>
         </div>
@@ -49,10 +50,10 @@ export function ImageViewer({ desktop }: { desktop: boolean }) {
           <img src={img.url} alt="" onClick={() => setActual((a) => !a)} />
           {many && (
             <>
-              <button className="vp-nav left" onClick={() => stepViewer(-1)} aria-label="上一张">
+              <button className="vp-nav left" onClick={() => stepViewer(-1)} aria-label={t('image.prev')}>
                 <ChevronLeft size={22} strokeWidth={1.8} />
               </button>
-              <button className="vp-nav right" onClick={() => stepViewer(1)} aria-label="下一张">
+              <button className="vp-nav right" onClick={() => stepViewer(1)} aria-label={t('image.next')}>
                 <ChevronRight size={22} strokeWidth={1.8} />
               </button>
             </>
@@ -87,7 +88,7 @@ export function ImageViewer({ desktop }: { desktop: boolean }) {
       }}
     >
       <div className="vf-head">
-        <button className="vf-btn" onClick={closeViewer} aria-label="关闭">
+        <button className="vf-btn" onClick={closeViewer} aria-label={t('common.close')}>
           <X size={22} strokeWidth={1.8} />
         </button>
         {many && <span className="vf-count">{`${s.index + 1} / ${s.images.length}`}</span>}

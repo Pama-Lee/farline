@@ -5,6 +5,7 @@
 import type { MarketPlugin } from '../../../shared/types.ts'
 import { API_VERSION, listPlugins } from './host.ts'
 import { FARLINE_VERSION, satisfies } from './semver.ts'
+import { t, tx } from '../i18n.ts'
 
 export const TOPIC = process.env.FARLINE_PLUGIN_TOPIC || 'farline-plugin'
 
@@ -35,9 +36,9 @@ async function searchRepos(): Promise<Repo[]> {
   const res = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(`topic:${TOPIC}`)}&sort=stars&per_page=50`, { headers: headers(), signal: AbortSignal.timeout(20_000) })
   if (res.status === 403 || res.status === 429) {
     if (cached) return cached.repos
-    throw new Error('GitHub 限流了，过一会儿再试')
+    throw new Error(t('err.githubLimited'))
   }
-  if (!res.ok) throw new Error(`GitHub 返回 ${res.status}`)
+  if (!res.ok) throw new Error(t('err.githubStatus', { status: res.status }))
   const repos: Repo[] = (await res.json()).items ?? []
   cached = { at: Date.now(), repos }
   return repos
@@ -75,8 +76,8 @@ export async function marketPlugins(refresh = false): Promise<MarketPlugin[]> {
       const mine = installed.find((p) => p.id === f.id)
       return {
         id: f.id,
-        name: f.name || f.id,
-        description: f.description || pkg.description || r.description || '',
+        name: tx(f.name) || f.id,
+        description: tx(f.description) || pkg.description || r.description || '',
         author: authorName(pkg.author) ?? r.owner.login,
         version: typeof pkg.version === 'string' ? pkg.version : '',
         repo: r.full_name,

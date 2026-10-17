@@ -4,14 +4,9 @@ import type { McpServer, PermissionMode } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
 import { Spinner } from '../components/bits.tsx'
 import { api } from '../lib/api.ts'
+import { labelMap, t, type MessageKey } from '../i18n.ts'
 
-export const MODE_LABELS: Record<PermissionMode, string> = {
-  default: '每次询问',
-  auto: '自动',
-  acceptEdits: '自动接受编辑',
-  plan: '只做规划',
-  bypassPermissions: '全部放行',
-}
+export const MODE_LABELS = labelMap<PermissionMode>('mode.')
 
 const MODE_ORDER: PermissionMode[] = ['auto', 'default', 'acceptEdits', 'plan', 'bypassPermissions']
 
@@ -40,7 +35,7 @@ export function ContextSheet(p: Props) {
 
   if (view === 'mode')
     return (
-      <Sheet title="权限" onClose={p.onClose} onBack={() => setView('main')}>
+      <Sheet title={t('context.permissions')} onClose={p.onClose} onBack={() => setView('main')}>
         <div className="group">
           {MODE_ORDER.map((m) => (
             <button
@@ -63,11 +58,11 @@ export function ContextSheet(p: Props) {
 
   return (
     <Sheet
-      title="添加上下文"
+      title={t('context.add')}
       onClose={p.onClose}
       action={
         <button className="head-action" onClick={() => photos.current?.click()}>
-          照片
+          {t('context.photos')}
         </button>
       }
     >
@@ -77,27 +72,27 @@ export function ContextSheet(p: Props) {
       <div className="tiles">
         <button className="tile" onClick={() => camera.current?.click()}>
           <Camera size={24} strokeWidth={1.6} />
-          相机
+          {t('context.camera')}
         </button>
         <button className="tile" onClick={() => photos.current?.click()}>
           <Image size={24} strokeWidth={1.6} />
-          照片
+          {t('context.photos')}
         </button>
       </div>
       <button className="row-btn" onClick={() => files.current?.click()}>
         <FileUp size={19} strokeWidth={1.6} />
-        <span className="grow">添加文件</span>
+        <span className="grow">{t('context.addFiles')}</span>
       </button>
       <button className="row-btn" onClick={() => setView('mode')}>
         <Zap size={19} strokeWidth={1.6} />
-        <span className="grow">权限</span>
+        <span className="grow">{t('context.permissions')}</span>
         <span className="value">{MODE_LABELS[p.mode]}</span>
         <ChevronRight size={18} color="var(--text-2)" />
       </button>
       {p.sessionId && (
         <button className="row-btn" onClick={() => setView('mcp')}>
           <Blocks size={19} strokeWidth={1.6} />
-          <span className="grow">连接器</span>
+          <span className="grow">{t('context.connectors')}</span>
           <ChevronRight size={18} color="var(--text-2)" />
         </button>
       )}
@@ -105,12 +100,12 @@ export function ContextSheet(p: Props) {
   )
 }
 
-const MCP_STATUS: Record<string, [string, string]> = {
-  connected: ['已连接', 'var(--green)'],
-  pending: ['连接中', 'var(--claude)'],
-  'needs-auth': ['需要登录', 'var(--text-3)'],
-  failed: ['连接失败', 'var(--red)'],
-  disabled: ['已停用', 'var(--text-3)'],
+const MCP_STATUS: Record<string, [MessageKey, string]> = {
+  connected: ['mcp.connected', 'var(--green)'],
+  pending: ['mcp.pending', 'var(--claude)'],
+  'needs-auth': ['mcp.needsAuth', 'var(--text-3)'],
+  failed: ['mcp.failed', 'var(--red)'],
+  disabled: ['mcp.disabled', 'var(--text-3)'],
 }
 
 function Connectors({ sessionId, onBack, onClose }: { sessionId: string; onBack: () => void; onClose: () => void }) {
@@ -119,17 +114,18 @@ function Connectors({ sessionId, onBack, onClose }: { sessionId: string; onBack:
     api.mcp(sessionId).then(setList, () => setList([]))
   }, [sessionId])
   return (
-    <Sheet title="连接器" onClose={onClose} onBack={onBack}>
+    <Sheet title={t('context.connectors')} onClose={onClose} onBack={onBack}>
       {!list && (
         <div className="empty">
           <Spinner />
         </div>
       )}
-      {list && list.length === 0 && <div className="empty">发消息后显示</div>}
+      {list && list.length === 0 && <div className="empty">{t('context.connectorsLater')}</div>}
       {list && list.length > 0 && (
         <div className="group">
           {list.map((s) => {
-            const [label, color] = MCP_STATUS[s.status] ?? [s.status, 'var(--text-3)']
+            const [key, color] = MCP_STATUS[s.status] ?? [undefined, 'var(--text-3)']
+            const label = key ? t(key) : s.status
             return (
               <div className="option" key={s.name}>
                 <span className="status-dot" style={{ background: color }} />

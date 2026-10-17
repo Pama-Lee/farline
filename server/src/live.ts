@@ -25,17 +25,20 @@ import { save, state, type SessionMeta } from './store.ts'
 import { ItemLog } from './transcript.ts'
 import { loadUpload } from './uploads.ts'
 import type { BackgroundTask, Catalog, EffortLevel, Item, McpServer, ModelOption, Patch, PermissionMode, Provider, ProviderInfo, SessionSnapshot, SessionState, SessionStatus, TaskOutput } from '../../shared/types.ts'
+import { t, tx } from './i18n.ts'
+import type { MessageKey } from '../../shared/i18n/index.ts'
 
 const SNAPSHOT_ITEMS = 400
 
 const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
 // Same wording as the Claude app's model picker.
-const MAIN: Record<string, { label: string; desc: string; resolved: string }> = {
-  opus: { label: 'Opus 5.5', desc: '适用于复杂工作与日常任务', resolved: 'claude-opus-5-5' },
-  fable: { label: 'Fable 5.1', desc: '应对您最艰巨的挑战', resolved: 'claude-fable-5-1' },
-  sonnet: { label: 'Sonnet 5.5', desc: '处理简单任务效率最高', resolved: 'claude-sonnet-5-5' },
-  haiku: { label: 'Haiku 5.5', desc: '快速解答的最佳选择', resolved: 'claude-haiku-5-5' },
+// desc is a message key, worded per request in catalog().
+const MAIN: Record<string, { label: string; desc: MessageKey; resolved: string }> = {
+  opus: { label: 'Opus 5.5', desc: 'model.desc.opus', resolved: 'claude-opus-5-5' },
+  fable: { label: 'Fable 5.1', desc: 'model.desc.fable', resolved: 'claude-fable-5-1' },
+  sonnet: { label: 'Sonnet 5.5', desc: 'model.desc.sonnet', resolved: 'claude-sonnet-5-5' },
+  haiku: { label: 'Haiku 5.5', desc: 'model.desc.haiku', resolved: 'claude-haiku-5-5' },
 }
 
 let claudeModels: ModelOption[] = Object.entries(MAIN).map(([value, m]) => ({ provider: 'claude', value, ...m, efforts: EFFORTS }))
@@ -53,16 +56,16 @@ function readyProviders() {
 
 export function catalog(): Catalog {
   const providers: ProviderInfo[] = [{ id: 'claude', label: 'Claude' }]
-  const models: ModelOption[] = [...claudeModels]
+  const models: ModelOption[] = claudeModels.map((m) => (MAIN[m.value] ? { ...m, desc: t(MAIN[m.value].desc) } : m))
   for (const p of readyProviders()) {
     let list: ModelOption[]
     try {
-      list = p.models().map((m) => ({ ...m, provider: p.id }))
+      list = p.models().map((m) => ({ ...m, label: tx(m.label), desc: m.desc === undefined ? undefined : tx(m.desc), provider: p.id }))
     } catch {
       continue
     }
     if (!list.length) continue
-    providers.push({ id: p.id, label: p.label, classifierModels: p.classifierModels, defaultPermissionMode: p.defaultPermissionMode })
+    providers.push({ id: p.id, label: tx(p.label), classifierModels: p.classifierModels, defaultPermissionMode: p.defaultPermissionMode })
     models.push(...list)
   }
   return { providers, models }
@@ -77,7 +80,8 @@ export function providerReady(id: Provider): boolean {
 }
 
 export function providerLabel(id: Provider): string {
-  return id === 'claude' ? 'Claude' : (pluginProvider(id)?.label ?? id)
+  const p = id === 'claude' ? undefined : pluginProvider(id)
+  return id === 'claude' ? 'Claude' : p ? tx(p.label) : id
 }
 
 export function defaultModel(id: Provider): string {
@@ -283,7 +287,7 @@ export class SessionView {
     let model: string | undefined = this.meta.model === 'default' ? undefined : this.meta.model
     if (this.meta.provider !== 'claude') {
       const p = pluginProvider(this.meta.provider)
-      if (!p || !providerReady(p.id)) throw new Error(`${providerLabel(this.meta.provider)} 不可用，去设置里检查对应插件`)
+      if (!p || !providerReady(p.id)) throw new Error(t('err.providerCheck', { name: providerLabel(this.meta.provider) }))
       Object.assign(env, p.env({ model: this.meta.model, classifierModel: classifierFor(this.meta) }))
       model = this.meta.model
     }
@@ -371,7 +375,7 @@ export class SessionView {
   }
 
   async stopTask(taskId: string) {
-    if (!this.q) throw new Error('会话进程已经结束')
+    if (!this.q) throw new Error(t('err.processEnded'))
     await this.q.stopTask(taskId)
   }
 
@@ -486,7 +490,7 @@ export class SessionView {
     const text = last?.kind === 'text' ? last.text : ''
     emit('turn.completed', { session: this.info(), text, error: !!m.is_error || m.subtype !== 'success' })
     if (this.subscribers.size === 0) {
-      void notify({ kind: 'done', title: this.title || '会话', body: text.slice(0, 120) || '已完成', url: `/s/${this.id}`, sessionId: this.id })
+      void notify({ kind: 'done', title: this.title || t('notify.session'), body: text.slice(0, 120) || t('notify.done'), url: `/s/${this.id}`, sessionId: this.id })
     }
     // Claude Code writes its generated title a few seconds after the turn.
     if (this.turns === 1) for (const ms of [0, 6000, 20000]) setTimeout(() => void this.refreshTitle(), ms)
@@ -502,10 +506,10 @@ export class SessionView {
   }
 
   send(text: string, uploadIds: string[] = []) {
-    if (!this.q && !providerReady(this.meta.provider)) throw new Error(`${providerLabel(this.meta.provider)} 不可用，去设置里检查对应插件`)
+    if (!this.q && !providerReady(this.meta.provider)) throw new Error(t('err.providerCheck', { name: providerLabel(this.meta.provider) }))
     const uploads = uploadIds.map(loadUpload).filter((u) => !!u)
     const content: any[] = []
-    const lines = [text.trim(), ...uploads.map((u) => `[附件] ${u.path}`)].filter(Boolean)
+    const lines = [text.trim(), ...uploads.map((u) => `[Attachment] ${u.path}`)].filter(Boolean)
     content.push({ type: 'text', text: lines.join('\n\n') })
     for (const u of uploads) {
       if (u.isImage && u.size < 5 * 1024 * 1024) {
@@ -531,7 +535,7 @@ export class SessionView {
   }
 
   async interrupt() {
-    this.rejectAllPending('已中断')
+    this.rejectAllPending('Interrupted by the user')
     await this.q?.interrupt().catch(() => undefined)
   }
 
@@ -593,7 +597,7 @@ export class SessionView {
     }
     const q = query({ prompt: never(), options: { cwd: this.cwd, env, pathToClaudeCodeExecutable: config.claudePath, resume: this.id, enableFileCheckpointing: true } })
     try {
-      return await Promise.race([fn(q), new Promise<never>((_, rej) => setTimeout(() => rej(new Error('超时')), 60_000))])
+      return await Promise.race([fn(q), new Promise<never>((_, rej) => setTimeout(() => rej(new Error(t('err.timeout'))), 60_000))])
     } finally {
       q.close()
     }
@@ -607,16 +611,16 @@ export class SessionView {
 
   // Go back to just before a user message: its files, the conversation, or both.
   async rewind(messageId: string, opts: { files: boolean; conversation: boolean }): Promise<{ restart?: boolean; files?: RewindFilesResult }> {
-    if (this.status !== 'idle' || (!this.live && runningElsewhere(this.id))) throw new Error('等这一轮结束再回退')
+    if (this.status !== 'idle' || (!this.live && runningElsewhere(this.id))) throw new Error(t('err.waitToRewind'))
     const i = this.log.items.findIndex((it) => it.id === messageId && it.kind === 'user')
-    if (i < 0) throw new Error('找不到这条消息')
+    if (i < 0) throw new Error(t('err.messageNotFound'))
     const parent = opts.conversation ? parentOf(this.id, messageId) : undefined
-    if (opts.conversation && parent === undefined) throw new Error('找不到这条消息')
-    if (opts.conversation && this.runningTasks) throw new Error('还有后台任务在运行')
+    if (opts.conversation && parent === undefined) throw new Error(t('err.messageNotFound'))
+    if (opts.conversation && this.runningTasks) throw new Error(t('err.tasksRunning'))
     let files: RewindFilesResult | undefined
     if (opts.files) {
       files = await this.withProcess((q) => q.rewindFiles(messageId))
-      if (!files.canRewind) throw new Error(files.error || '没有可回退的文件改动')
+      if (!files.canRewind) throw new Error(files.error || t('err.nothingToRewind'))
     }
     if (!opts.conversation) return { files }
     // Rewinding to the first message leaves nothing; start over instead.
@@ -633,15 +637,15 @@ export class SessionView {
   // Rewrite a reply in the transcript. The model reads the transcript again
   // when the next process resumes, so the next turn sees the new text.
   async editText(itemId: string, text: string) {
-    if (this.status !== 'idle' || (!this.live && runningElsewhere(this.id))) throw new Error('等这一轮结束再编辑')
+    if (this.status !== 'idle' || (!this.live && runningElsewhere(this.id))) throw new Error(t('err.waitToEdit'))
     const item = this.log.get(itemId)
-    if (item?.kind !== 'text' || item.streaming) throw new Error('找不到这段回复')
-    if (!text.trim()) throw new Error('内容不能为空')
+    if (item?.kind !== 'text' || item.streaming) throw new Error(t('err.replyNotFound'))
+    if (!text.trim()) throw new Error(t('err.emptyText'))
     const m = itemId.match(/^(.+):(\d+)$/)
     const file = sessionFile(this.id)
-    if (!m || !file) throw new Error('找不到这段回复')
+    if (!m || !file) throw new Error(t('err.replyNotFound'))
     if (this.live) {
-      if (this.runningTasks) throw new Error('还有后台任务在运行')
+      if (this.runningTasks) throw new Error(t('err.tasksRunning'))
       this.close()
       // Let the process finish its last writes.
       await new Promise((r) => setTimeout(r, 500))
@@ -663,7 +667,7 @@ export class SessionView {
       lines[i] = JSON.stringify(e)
       found = true
     }
-    if (!found) throw new Error('找不到这段回复')
+    if (!found) throw new Error(t('err.replyNotFound'))
     const tmp = `${file}.farline-edit`
     writeFileSync(tmp, lines.join('\n'), { mode: statSync(file).mode })
     renameSync(tmp, file)
@@ -709,7 +713,7 @@ export class SessionView {
         const questions = Array.isArray((input as any).questions) ? (input as any).questions : []
         this.log.upsert({ kind: 'ask', id: itemId, questions, status: 'pending', reqId, answer: prev?.kind === 'ask' ? prev.answer : undefined })
         this.pending.set(reqId, { kind: 'ask', itemId, input, resolve })
-        void this.alert('question', '有问题需要你回答', questions[0]?.question ?? '')
+        void this.alert('question', t('notify.question'), questions[0]?.question ?? '')
       } else {
         const prev = this.log.get(itemId)
         const base: Item = prev?.kind === 'tool' ? prev : { kind: 'tool', id: itemId, name: toolName, input, status: 'running' }
@@ -726,7 +730,7 @@ export class SessionView {
           },
         })
         this.pending.set(reqId, { kind: 'tool', itemId, input, suggestions: opts.suggestions, resolve })
-        void this.alert('permission', '需要授权', opts.title ?? toolName)
+        void this.alert('permission', t('notify.permission'), opts.title ?? toolName)
       }
       this.status = 'requires_action'
       this.flushNow(true)
@@ -736,7 +740,7 @@ export class SessionView {
   private async alert(kind: 'permission' | 'question', title: string, body: string) {
     emit('attention', { session: this.info(), kind, title: body })
     if (this.subscribers.size === 0) {
-      await notify({ kind: 'attention', title: `${title} · ${this.title || '会话'}`, body: body.slice(0, 120), url: `/s/${this.id}`, sessionId: this.id })
+      await notify({ kind: 'attention', title: `${title} · ${this.title || t('notify.session')}`, body: body.slice(0, 120), url: `/s/${this.id}`, sessionId: this.id })
     }
   }
 
@@ -759,7 +763,7 @@ export class SessionView {
   decide(reqId: string, decision: 'allow' | 'always' | 'deny') {
     const p = this.pending.get(reqId)
     if (!p || p.kind !== 'tool') return false
-    if (decision === 'deny') return this.settle(reqId, { behavior: 'deny', message: '用户拒绝了这次操作' })
+    if (decision === 'deny') return this.settle(reqId, { behavior: 'deny', message: 'The user denied this action' })
     return this.settle(reqId, {
       behavior: 'allow',
       updatedInput: p.input,
@@ -770,7 +774,7 @@ export class SessionView {
   answer(reqId: string, answers: Record<string, string> | null) {
     const p = this.pending.get(reqId)
     if (!p || p.kind !== 'ask') return false
-    if (!answers) return this.settle(reqId, { behavior: 'deny', message: '用户跳过了这些问题' })
+    if (!answers) return this.settle(reqId, { behavior: 'deny', message: 'The user skipped these questions' })
     const item = this.log.get(p.itemId)
     if (item?.kind === 'ask') {
       this.log.upsert({ ...item, answer: Object.entries(answers).map(([q, a]) => `${q}\n${a}`).join('\n\n') })
@@ -778,7 +782,7 @@ export class SessionView {
     return this.settle(reqId, { behavior: 'allow', updatedInput: { ...p.input, answers } })
   }
 
-  private rejectAllPending(message = '会话已结束') {
+  private rejectAllPending(message = 'The session ended') {
     for (const reqId of [...this.pending.keys()]) this.settle(reqId, { behavior: 'deny', message })
   }
 }

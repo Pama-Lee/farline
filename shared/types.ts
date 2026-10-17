@@ -60,7 +60,8 @@ export type Item =
       status: 'pending' | 'answered' | 'cancelled'
       answer?: string
     }
-  | { kind: 'notice'; id: string; level: 'info' | 'error'; text: string }
+  // code: a fixed notice the client words itself (notice.<code>).
+  | { kind: 'notice'; id: string; level: 'info' | 'error'; text: string; code?: 'interrupted' }
   // A background task reporting back: finished, failed, stopped, or a
   // monitor event (no status).
   | { kind: 'task'; id: string; taskId: string; toolUseId?: string; status?: TaskEndStatus; summary: string; result?: string; ts?: number }
@@ -133,7 +134,7 @@ export interface ModelOption {
   value: string
   label: string
   desc?: string
-  // Shown under "更多模型" instead of the main list.
+  // Shown under "More models" instead of the main list.
   more?: boolean
   resolved?: string
   efforts?: EffortLevel[]

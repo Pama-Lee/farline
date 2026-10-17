@@ -9,6 +9,7 @@ import { useSessions } from '../lib/useSessions.ts'
 import { DeviceSheet } from '../sheets/DeviceSheet.tsx'
 import { FilterSheet, HistorySheet } from '../sheets/ListSheets.tsx'
 import { SettingsSheet } from '../sheets/SettingsSheet.tsx'
+import { t } from '../i18n.ts'
 
 export function Sidebar({ device, activeId, onLogout, onHide }: { device: DeviceInfo | null; activeId: string | null; onLogout: () => void; onHide: () => void }) {
   const { sessions, nextOffset, loading, loadMore } = useSessions()
@@ -26,30 +27,30 @@ export function Sidebar({ device, activeId, onLogout, onHide }: { device: Device
       <div className="sb-head">
         <span className="sb-title">Farline</span>
         <div className="sb-icons">
-          <button onClick={() => setSheet('history')} aria-label="历史" title="历史">
+          <button onClick={() => setSheet('history')} aria-label={t('nav.history')} title={t('nav.history')}>
             <Clock size={18} strokeWidth={1.7} />
           </button>
-          <button onClick={() => setSheet('filter')} aria-label="筛选" title="按目录筛选">
+          <button onClick={() => setSheet('filter')} aria-label={t('nav.filter')} title={t('nav.filterByFolder')}>
             <SlidersVertical size={18} strokeWidth={1.7} />
           </button>
-          <button onClick={() => setSheet('settings')} aria-label="设置" title="设置">
+          <button onClick={() => setSheet('settings')} aria-label={t('nav.settings')} title={t('nav.settings')}>
             <Settings2 size={18} strokeWidth={1.7} />
           </button>
-          <button onClick={onHide} aria-label="收起侧栏" title="收起侧栏 (⌘B)">
+          <button onClick={onHide} aria-label={t('nav.hideSidebar')} title={`${t('nav.hideSidebar')} (⌘B)`}>
             <PanelLeftClose size={18} strokeWidth={1.7} />
           </button>
         </div>
       </div>
 
       <button className="sb-new" onClick={() => navigate(`/new?cwd=${encodeURIComponent(newCwd)}`)}>
-        <Plus size={18} strokeWidth={2} /> 新建会话
+        <Plus size={18} strokeWidth={2} /> {t('nav.newSession')}
       </button>
 
       <div className="sb-search">
         <Search size={16} strokeWidth={1.8} color="var(--text-2)" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索会话" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('nav.searchSessions')} />
         {q && (
-          <button onClick={() => setQ('')} aria-label="清空">
+          <button onClick={() => setQ('')} aria-label={t('common.clear')}>
             <X size={15} color="var(--text-2)" />
           </button>
         )}
@@ -65,14 +66,14 @@ export function Sidebar({ device, activeId, onLogout, onHide }: { device: Device
       </button>
 
       <div className="sb-label">
-        <span>{filter ? basename(filter) : '会话'}</span>
+        <span>{filter ? basename(filter) : t('nav.sessions')}</span>
         {filter && (
           <button
             onClick={() => {
               setFilter(null)
               localStorage.removeItem('farline.filter')
             }}
-            aria-label="取消筛选"
+            aria-label={t('nav.clearFilter')}
           >
             <X size={14} />
           </button>
@@ -101,12 +102,12 @@ export function Sidebar({ device, activeId, onLogout, onHide }: { device: Device
               <div className="s">
                 {basename(s.cwd) || device?.name}
                 {s.providerLabel && <span className="tag">{s.providerLabel}</span>}
-                {!!s.tasks && <span className="tag">后台 {s.tasks}</span>}
+                {!!s.tasks && <span className="tag">{t('nav.inBackground', { n: s.tasks })}</span>}
               </div>
             </span>
           </button>
         ))}
-        {!loading && shown.length === 0 && <div className="empty">没有会话</div>}
+        {!loading && shown.length === 0 && <div className="empty">{t('nav.noSessions')}</div>}
       </div>
 
       {sheet === 'device' && device && (

@@ -8,6 +8,7 @@ import { openFile } from '../lib/files.ts'
 import { openViewer } from '../lib/viewer.ts'
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { category, stepLabel, stepsSummary, type StepItem } from '../lib/steps.ts'
+import { t } from '../i18n.ts'
 
 const ICONS: Record<string, ReactNode> = {
   web: <Globe size={19} strokeWidth={1.6} />,
@@ -101,7 +102,7 @@ function Diff({ oldText, newText }: { oldText: string; newText: string }) {
 }
 
 function StepDetail({ step, onBack, ...rest }: Omit<Props, 'steps'> & { step: StepItem; onBack?: () => void }) {
-  const title = step.kind === 'thinking' ? '思考' : step.name.replace(/^mcp__(.+?)__/, '$1 · ')
+  const title = step.kind === 'thinking' ? t('step.thinking') : step.name.replace(/^mcp__(.+?)__/, '$1 · ')
   return (
     <Sheet title={title} onClose={rest.onClose} onBack={onBack} size="medium">
       <StepBody step={step} {...rest} />
@@ -132,7 +133,7 @@ export function InlineSteps({ steps, ...rest }: Props) {
             <button className="is-head" onClick={() => toggle(s.id)}>
               {running && <Spinner size={14} />}
               <span className="l">{label}</span>
-              {failed && <span className="err">失败</span>}
+              {failed && <span className="err">{t('step.failed')}</span>}
               <ChevronRight size={15} strokeWidth={1.7} className="chev" />
             </button>
             {isOpen && (
@@ -150,46 +151,46 @@ export function InlineSteps({ steps, ...rest }: Props) {
 function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<Props, 'steps'> & { step: StepItem; compact?: boolean }) {
   const { toolRenderers } = usePlugins()
   const [moving, setMoving] = useState(false)
-  if (step.kind === 'thinking') return compact ? <div className="is-text">{step.text}</div> : <Field label="内容" plain>{step.text}</Field>
+  if (step.kind === 'thinking') return compact ? <div className="is-text">{step.text}</div> : <Field label={t('field.content')} plain>{step.text}</Field>
   const i = step.input
-  const out = step.result !== undefined ? step.result + (step.truncated ? '\n…（已截断）' : '') : step.status === 'running' ? null : ''
+  const out = step.result !== undefined ? step.result + (step.truncated ? t('step.truncated') : '') : step.status === 'running' ? null : ''
   const movable = !step.taskId && step.status === 'running' && live && !!sessionId && ['Bash', 'Agent', 'Task'].includes(step.name)
   const moveToBackground = async () => {
     if (moving || !sessionId) return
     setMoving(true)
     try {
       const { ok } = await api.backgroundTool(sessionId, step.id)
-      if (!ok) toast('暂时不能转入后台')
+      if (!ok) toast(t('step.cantBackground'))
     } catch (e: any) {
-      toast(e?.message ?? '操作失败')
+      toast(e?.message ?? t('common.failed'))
     } finally {
       setMoving(false)
     }
   }
   const output = step.taskId ? (
     <button className="row-btn" style={{ marginTop: 16 }} onClick={() => onOpenTask(step.taskId!)}>
-      <span className="grow">查看后台任务</span>
+      <span className="grow">{t('step.viewTask')}</span>
       <ChevronRight size={18} color="var(--text-3)" />
     </button>
   ) : movable ? (
     <button className="row-btn" style={{ marginTop: 16 }} onClick={moveToBackground} disabled={moving}>
-      <span className="grow">转入后台</span>
+      <span className="grow">{t('step.moveToBackground')}</span>
       {moving && <Spinner size={18} />}
     </button>
   ) :
     out === null ? null : step.images?.length ? (
       <>
-        <div className="field-label">输出</div>
+        <div className="field-label">{t('field.output')}</div>
         <div className="detail-images">
           {step.images.map((im, i) => (
-            <button key={im.url} onClick={() => openViewer(step.images!.map((x) => ({ url: x.url, name: s(step.input.file_path) || undefined })), i)} aria-label="查看图片">
+            <button key={im.url} onClick={() => openViewer(step.images!.map((x) => ({ url: x.url, name: s(step.input.file_path) || undefined })), i)} aria-label={t('common.viewImage')}>
               <img src={im.url} alt="" />
             </button>
           ))}
         </div>
       </>
     ) : (
-      <Field label="输出">{out || '（无输出）'}</Field>
+      <Field label={t('field.output')}>{out || t('step.noOutput')}</Field>
     )
   let body: ReactNode
   switch (step.name) {
@@ -204,8 +205,8 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
         </>
       ) : (
         <>
-          {!!i.description && <Field label="描述" plain>{s(i.description)}</Field>}
-          <Field label="命令">
+          {!!i.description && <Field label={t('field.description')} plain>{s(i.description)}</Field>}
+          <Field label={t('field.command')}>
             <span dangerouslySetInnerHTML={{ __html: highlight(s(i.command), 'bash') }} />
           </Field>
           {output}
@@ -215,7 +216,7 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'WebSearch':
       body = (
         <>
-          <Field label="查询">{s(i.query)}</Field>
+          <Field label={t('field.query')}>{s(i.query)}</Field>
           {output}
         </>
       )
@@ -223,8 +224,8 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'WebFetch':
       body = (
         <>
-          <Field label="网址">{s(i.url)}</Field>
-          {!!i.prompt && <Field label="要求" plain>{s(i.prompt)}</Field>}
+          <Field label={t('field.url')}>{s(i.url)}</Field>
+          {!!i.prompt && <Field label={t('field.prompt')} plain>{s(i.prompt)}</Field>}
           {output}
         </>
       )
@@ -232,7 +233,7 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'Read':
       body = (
         <>
-          <Field label="文件">
+          <Field label={t('field.file')}>
             <FilePath path={i.file_path} line={i.offset} sessionId={sessionId} onClose={onClose} />
             {i.offset ? `  (${s(i.offset)}–)` : ''}
           </Field>
@@ -243,10 +244,10 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'Edit':
       body = (
         <>
-          <Field label="文件">
+          <Field label={t('field.file')}>
             <FilePath path={i.file_path} sessionId={sessionId} onClose={onClose} />
           </Field>
-          <Field label="修改"><Diff oldText={s(i.old_string)} newText={s(i.new_string)} /></Field>
+          <Field label={t('field.change')}><Diff oldText={s(i.old_string)} newText={s(i.new_string)} /></Field>
           {output}
         </>
       )
@@ -254,12 +255,12 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'MultiEdit':
       body = (
         <>
-          <Field label="文件">
+          <Field label={t('field.file')}>
             <FilePath path={i.file_path} sessionId={sessionId} onClose={onClose} />
           </Field>
           {Array.isArray(i.edits) &&
             i.edits.map((e: any, k: number) => (
-              <Field key={k} label={`修改 ${k + 1}`}><Diff oldText={s(e.old_string)} newText={s(e.new_string)} /></Field>
+              <Field key={k} label={t('field.changeN', { n: k + 1 })}><Diff oldText={s(e.old_string)} newText={s(e.new_string)} /></Field>
             ))}
           {output}
         </>
@@ -268,10 +269,10 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'Write':
       body = (
         <>
-          <Field label="文件">
+          <Field label={t('field.file')}>
             <FilePath path={i.file_path} sessionId={sessionId} onClose={onClose} />
           </Field>
-          <Field label="内容">{s(i.content)}</Field>
+          <Field label={t('field.content')}>{s(i.content)}</Field>
           {output}
         </>
       )
@@ -280,8 +281,8 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'Glob':
       body = (
         <>
-          <Field label="模式">{s(i.pattern)}</Field>
-          {!!i.path && <Field label="路径">{s(i.path)}</Field>}
+          <Field label={t('field.pattern')}>{s(i.pattern)}</Field>
+          {!!i.path && <Field label={t('field.path')}>{s(i.path)}</Field>}
           {output}
         </>
       )
@@ -290,8 +291,8 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     case 'Task':
       body = (
         <>
-          {!!i.description && <Field label="描述" plain>{s(i.description)}</Field>}
-          <Field label="指令" plain>{s(i.prompt)}</Field>
+          {!!i.description && <Field label={t('field.description')} plain>{s(i.description)}</Field>}
+          <Field label={t('field.instructions')} plain>{s(i.prompt)}</Field>
           {output}
         </>
       )
@@ -300,10 +301,10 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
       body = (
         <div className="group" style={{ marginTop: 10 }}>
           {Array.isArray(i.todos) &&
-            i.todos.map((t: any, k: number) => (
+            i.todos.map((td: any, k: number) => (
               <div className="option" key={k}>
-                {t.status === 'completed' ? <CheckCircle2 size={20} color="var(--green)" /> : t.status === 'in_progress' ? <CircleDot size={20} /> : <Circle size={20} color="var(--text-3)" />}
-                <span className="grow">{s(t.content)}</span>
+                {td.status === 'completed' ? <CheckCircle2 size={20} color="var(--green)" /> : td.status === 'in_progress' ? <CircleDot size={20} /> : <Circle size={20} color="var(--text-3)" />}
+                <span className="grow">{s(td.content)}</span>
               </div>
             ))}
         </div>
@@ -312,7 +313,7 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<
     default:
       body = (
         <>
-          <Field label="输入">{JSON.stringify(i, null, 2)}</Field>
+          <Field label={t('field.input')}>{JSON.stringify(i, null, 2)}</Field>
           {output}
         </>
       )

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Spinner } from '../components/bits.tsx'
 import { api } from '../lib/api.ts'
+import { t } from '../i18n.ts'
 
 export function Login({ onDone }: { onDone: () => void }) {
   const [pw, setPw] = useState('')
@@ -26,9 +27,9 @@ export function Login({ onDone }: { onDone: () => void }) {
           }
         }}
       >
-        <input type="password" autoComplete="current-password" placeholder="密码" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
+        <input type="password" autoComplete="current-password" placeholder={t('login.password')} value={pw} onChange={(e) => setPw(e.target.value)} autoFocus />
         <button className="black-pill" style={{ justifyContent: 'center' }} disabled={!pw || busy}>
-          {busy ? <Spinner size={20} /> : '登录'}
+          {busy ? <Spinner size={20} /> : t('login.signIn')}
         </button>
         <div className="err">{err}</div>
       </form>

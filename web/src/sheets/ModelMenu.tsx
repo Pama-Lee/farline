@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ModelOption } from '../../../shared/types.ts'
 import { Popover } from '../components/Popover.tsx'
 import { EFFORT_LABELS, EFFORT_ORDER, isCurrent, type ModelPickerProps } from './ModelSheet.tsx'
+import { t } from '../i18n.ts'
 
 export function wantsMenuPicker() {
   return getComputedStyle(document.documentElement).getPropertyValue('--fl-model-picker').trim() === 'menu'
@@ -64,10 +65,10 @@ export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
       .filter((g) => g.models.length > 0)
     body = (
       <>
-        {back('模型')}
+        {back(t('model.model'))}
         {p.models.length > 8 && (
           <div className="menu-search">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索模型" autoFocus={!('ontouchstart' in window)} spellCheck={false} autoComplete="off" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('model.search')} autoFocus={!('ontouchstart' in window)} spellCheck={false} autoComplete="off" />
           </div>
         )}
         <div className="menu-scroll" ref={listRef}>
@@ -77,14 +78,14 @@ export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
               {g.models.map(modelRow)}
             </div>
           ))}
-          {groups.length === 0 && <div className="menu-empty">没有匹配的模型</div>}
+          {groups.length === 0 && <div className="menu-empty">{t('model.noMatch')}</div>}
         </div>
       </>
     )
   } else if (view === 'effort' && efforts) {
     body = (
       <>
-        {back('思考强度')}
+        {back(t('model.effort'))}
         {efforts.map((e) => (
           <button
             className="menu-row"
@@ -103,7 +104,7 @@ export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
   } else if (view === 'classifier') {
     body = (
       <>
-        {back('自动模式判断')}
+        {back(t('model.classifier'))}
         {classifiers.map((m) => (
           <button
             className="menu-row"
@@ -123,10 +124,10 @@ export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
     const settings = !!efforts || classifiers.length > 1
     body = (
       <>
-        {efforts && entry('思考强度', p.effort ? EFFORT_LABELS[p.effort] : undefined, 'effort')}
-        {classifiers.length > 1 && entry('自动模式判断', classifiers.find((m) => m.value === p.classifierModel)?.label, 'classifier')}
+        {efforts && entry(t('model.effort'), p.effort ? EFFORT_LABELS[p.effort] : undefined, 'effort')}
+        {classifiers.length > 1 && entry(t('model.classifier'), classifiers.find((m) => m.value === p.classifierModel)?.label, 'classifier')}
         {settings && <div className="menu-sep" />}
-        {entry('模型', current?.label ?? p.model, 'model')}
+        {entry(t('model.model'), current?.label ?? p.model, 'model')}
       </>
     )
   }

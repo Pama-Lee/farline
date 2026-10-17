@@ -1,7 +1,7 @@
 // Finds, loads and runs plugins, and keeps their enabled state and settings.
 //
 // A plugin is a directory whose package.json has a "farline" field:
-//   { "id": "wecom", "name": "企业微信", "apiVersion": 1,
+//   { "id": "wecom", "name": { "en": "WeCom", "zh-CN": "企业微信" }, "apiVersion": 1,
 //     "server": "./server.js", "web": "./web.js", "styles": "./style.css",
 //     "skin": false, "enabledByDefault": false }
 // Looked up in the built-in plugins directory, <dataDir>/plugins/*, and npm
@@ -18,14 +18,15 @@ import { sendTo } from '../push.ts'
 import { anthropicCompatible } from './helpers.ts'
 import { FARLINE_VERSION, satisfies } from './semver.ts'
 import { addChannel, addHook, addProvider, allChannels, secretEnv } from './registry.ts'
-import type { Disposable, PluginContext, PluginDefinition, SettingField, SettingValues } from './types.ts'
+import type { Disposable, PluginContext, PluginDefinition, SettingField, SettingValues, StatusReport, Text } from './types.ts'
+import { currentLocale, t, tx } from '../i18n.ts'
 
 export const API_VERSION = 1
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,40}$/
 
 interface Manifest {
   id: string
-  name: string
+  name: Text
   version: string
   apiVersion: number
   server?: string
@@ -176,7 +177,7 @@ function fieldViews(p: Plugin): SettingFieldView[] {
     const own = stored[f.key]
     const env = f.env ? process.env[f.env] : undefined
     const v = own ?? (env || undefined) ?? f.default
-    const view: SettingFieldView = { key: f.key, label: f.label, type: f.type, placeholder: f.placeholder, options: f.options }
+    const view: SettingFieldView = { key: f.key, label: tx(f.label), type: f.type, placeholder: f.placeholder === undefined ? undefined : tx(f.placeholder), options: f.options?.map((o) => ({ value: o.value, label: tx(o.label) })) }
     if (own !== undefined) view.source = 'saved'
     else if (env) view.source = 'env'
     if (v === undefined || v === '') return view
@@ -189,12 +190,12 @@ function fieldViews(p: Plugin): SettingFieldView[] {
 function coerce(f: SettingField, v: unknown): string | number | boolean {
   if (f.type === 'number') {
     const n = Number(v)
-    if (!Number.isFinite(n)) throw new Error(`${f.label}需要是数字`)
+    if (!Number.isFinite(n)) throw new Error(t('err.mustBeNumber', { label: tx(f.label) }))
     return n
   }
   if (f.type === 'boolean') return v === true || v === 'true'
   const s = String(v).trim()
-  if (f.type === 'select' && f.options && !f.options.some((o) => o.value === s)) throw new Error(`${f.label}的取值不对`)
+  if (f.type === 'select' && f.options && !f.options.some((o) => o.value === s)) throw new Error(t('err.badOption', { label: tx(f.label) }))
   return s
 }
 
@@ -207,6 +208,8 @@ function context(p: Plugin): PluginContext {
   p.http = http
   return {
     id,
+    locale: () => currentLocale(),
+    t: (text) => tx(text),
     get dataDir() {
       const dir = join(config.dataDir, 'plugin-data', id)
       mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -349,10 +352,10 @@ async function start(p: Plugin) {
 // A plugin from GitHub may override a built-in one, never a local or npm one.
 export async function installDir(dir: string, remote: RemoteSource): Promise<Plugin> {
   const manifest = readManifest(dir)
-  if (!manifest) throw new Error('没有找到 Farline 插件：package.json 里缺少 farline 字段')
+  if (!manifest) throw new Error(t('err.noManifest'))
   const id = manifest.id
   const existing = plugins.get(id)
-  if (existing && existing.source !== 'builtin' && !isRemote(existing)) throw new Error(`已经有一个 id 为 ${id} 的${existing.source === 'npm' ? ' npm ' : '本地'}插件`)
+  if (existing && existing.source !== 'builtin' && !isRemote(existing)) throw new Error(t(existing.source === 'npm' ? 'err.idTakenNpm' : 'err.idTakenLocal', { id }))
   const target = join(userPluginsDir, id)
   if (existing && existing.state !== 'disabled') await deactivate(existing)
   const old = existsSync(target) ? `${target}.old-${Date.now()}` : null
@@ -369,7 +372,7 @@ export async function installDir(dir: string, remote: RemoteSource): Promise<Plu
 }
 
 export async function uninstall(p: Plugin) {
-  if (!isRemote(p)) throw new Error('只能卸载从 GitHub 安装的插件')
+  if (!isRemote(p)) throw new Error(t('err.onlyGitHub'))
   const id = p.manifest.id
   if (p.state !== 'disabled') await deactivate(p)
   restartSessionsOf(p)
@@ -403,7 +406,7 @@ function assetUrl(p: Plugin, entry: string | undefined): string | undefined {
 export function pluginInfo(p: Plugin): PluginInfo {
   return {
     id: p.manifest.id,
-    name: p.manifest.name,
+    name: tx(p.manifest.name),
     version: p.manifest.version,
     source: isRemote(p) ? 'github' : p.source,
     ...(isRemote(p) ? { remote: remotes[p.manifest.id] } : {}),
@@ -414,7 +417,7 @@ export function pluginInfo(p: Plugin): PluginInfo {
     styles: p.state === 'active' ? assetUrl(p, p.manifest.styles) : undefined,
     ...(p.manifest.skin ? { skin: true } : {}),
     settings: fieldViews(p),
-    links: p.def?.links ?? [],
+    links: (p.def?.links ?? []).map((l) => ({ label: tx(l.label), url: l.url })),
     hasStatus: !!p.def?.status,
     notifies: allChannels(p.manifest.id).length > 0,
   }
@@ -422,7 +425,7 @@ export function pluginInfo(p: Plugin): PluginInfo {
 
 export function listPlugins(): PluginInfo[] {
   const order = { builtin: 0, local: 1, github: 1, npm: 2 }
-  return [...plugins.values()].sort((a, b) => order[a.source] - order[b.source] || a.manifest.name.localeCompare(b.manifest.name)).map(pluginInfo)
+  return [...plugins.values()].sort((a, b) => order[a.source] - order[b.source] || tx(a.manifest.name).localeCompare(tx(b.manifest.name))).map(pluginInfo)
 }
 
 export function getPlugin(id: string): Plugin | undefined {
@@ -456,7 +459,7 @@ export async function saveSettings(p: Plugin, input: Record<string, unknown>) {
     else changes[f.key] = coerce(f, v)
   }
   const next = effective(p, changes)
-  await p.def?.validateSettings?.(next)
+  await p.def?.validateSettings?.(next, { locale: () => currentLocale(), t: (text) => tx(text) })
   const stored = { ...saved[p.manifest.id]?.settings }
   for (const [k, v] of Object.entries(changes)) v === null || v === '' ? delete stored[k] : (stored[k] = v)
   saved[p.manifest.id] = { ...saved[p.manifest.id], settings: stored }
@@ -473,16 +476,18 @@ export async function saveSettings(p: Plugin, input: Record<string, unknown>) {
 
 export async function pluginStatus(p: Plugin): Promise<PluginStatus> {
   if (p.state !== 'active' || !p.def?.status || !p.ctx) return {}
-  return await Promise.race([
-    Promise.resolve(p.def.status(p.ctx)),
-    new Promise<PluginStatus>((r) => setTimeout(() => r({}), 10_000)),
-  ])
+  const r: StatusReport = await Promise.race([Promise.resolve(p.def.status(p.ctx)), new Promise<StatusReport>((res) => setTimeout(() => res({}), 10_000))])
+  return {
+    summary: r.summary === undefined ? undefined : tx(r.summary),
+    tone: r.tone,
+    rows: r.rows?.map((row) => ({ label: tx(row.label), value: tx(row.value), tone: row.tone })),
+  }
 }
 
 export async function testNotification(p: Plugin) {
   const channels = allChannels(p.manifest.id)
-  if (!channels.length) throw new Error('这个插件没有通知渠道')
-  for (const ch of channels) await sendTo(ch, { kind: 'test', title: '测试通知', body: '收到这条说明通知渠道可用', url: '/' })
+  if (!channels.length) throw new Error(t('err.noChannel'))
+  for (const ch of channels) await sendTo(ch, { kind: 'test', title: t('notify.testTitle'), body: t('notify.testBody'), url: '/' })
 }
 
 export function pluginFetch(p: Plugin, req: Request, path: string): Response | Promise<Response> {

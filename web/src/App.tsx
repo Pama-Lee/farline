@@ -16,8 +16,11 @@ import { Sidebar } from './screens/Sidebar.tsx'
 import { SidebarResizer } from './components/SidebarResizer.tsx'
 import { useSidebarLayout } from './lib/prefs.ts'
 import { PanelLeftOpen } from 'lucide-react'
+import { t, useLocale } from './i18n.ts'
 
 export function App() {
+  // Everything below reads the language at render time.
+  useLocale()
   const [authed, setAuthed] = useState<boolean | null>(null)
   const [device, setDevice] = useState<DeviceInfo | null>(null)
   const [catalog, setCatalog] = useState<Catalog>({ providers: [], models: [] })
@@ -115,7 +118,7 @@ export function App() {
         <main className="main-pane">
           {main}
           {sb.hidden && !files && (
-            <button className="sb-show" onClick={() => sb.setHidden(false)} aria-label="显示侧栏" title="显示侧栏 (⌘B)">
+            <button className="sb-show" onClick={() => sb.setHidden(false)} aria-label={t('nav.showSidebar')} title={`${t('nav.showSidebar')} (⌘B)`}>
               <PanelLeftOpen size={19} strokeWidth={1.7} />
             </button>
           )}

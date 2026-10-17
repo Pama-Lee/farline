@@ -9,6 +9,7 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type { RemoteSource } from '../../../shared/types.ts'
 import { installDir, userPluginsDir } from './host.ts'
+import { t } from '../i18n.ts'
 
 const run = promisify(execFile)
 const MAX_BYTES = 50 * 1024 * 1024
@@ -35,10 +36,10 @@ export function parseSpec(input: string): Spec {
     parts = [parts[0], parts[1], ...parts.slice(4)]
   }
   const [owner, name, ...rest] = parts
-  if (!owner || !name || !NAME.test(owner) || !NAME.test(name.replace(/\.git$/, ''))) throw new Error('填 owner/repo 或 GitHub 仓库地址')
+  if (!owner || !name || !NAME.test(owner) || !NAME.test(name.replace(/\.git$/, ''))) throw new Error(t('err.repoSpec'))
   const path = rest.join('/') || undefined
-  if (path && path.split('/').some((x) => x === '..' || x === '.')) throw new Error('目录不对')
-  if (ref && !/^[\w./-]+$/.test(ref)) throw new Error('分支或标签不对')
+  if (path && path.split('/').some((x) => x === '..' || x === '.')) throw new Error(t('err.badPath'))
+  if (ref && !/^[\w./-]+$/.test(ref)) throw new Error(t('err.badRef'))
   return { repo: `${owner}/${name.replace(/\.git$/, '')}`, ref, path }
 }
 
@@ -52,22 +53,22 @@ export async function latestCommit(spec: Spec): Promise<string> {
     headers: headers('application/vnd.github.sha'),
     signal: AbortSignal.timeout(20_000),
   })
-  if (res.status === 404 || res.status === 422) throw new Error(spec.ref ? `找不到仓库 ${spec.repo} 或分支 ${spec.ref}` : `找不到仓库 ${spec.repo}`)
-  if (res.status === 403 || res.status === 429) throw new Error('GitHub 限流了，过一会儿再试')
-  if (!res.ok) throw new Error(`GitHub 返回 ${res.status}`)
+  if (res.status === 404 || res.status === 422) throw new Error(spec.ref ? t('err.repoOrRefNotFound', { repo: spec.repo, ref: spec.ref }) : t('err.repoNotFound', { repo: spec.repo }))
+  if (res.status === 403 || res.status === 429) throw new Error(t('err.githubLimited'))
+  if (!res.ok) throw new Error(t('err.githubStatus', { status: res.status }))
   const sha = (await res.text()).trim()
-  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error('GitHub 返回的内容不对')
+  if (!/^[0-9a-f]{40}$/.test(sha)) throw new Error(t('err.githubBadResponse'))
   return sha
 }
 
 async function download(repo: string, sha: string, file: string) {
   const res = await fetch(`https://api.github.com/repos/${repo}/tarball/${sha}`, { headers: headers('application/vnd.github+json'), signal: AbortSignal.timeout(120_000) })
-  if (!res.ok || !res.body) throw new Error(`下载失败 (${res.status})`)
+  if (!res.ok || !res.body) throw new Error(t('err.downloadFailed', { status: res.status }))
   const chunks: Buffer[] = []
   let size = 0
   for await (const c of res.body as any as AsyncIterable<Uint8Array>) {
     size += c.byteLength
-    if (size > MAX_BYTES) throw new Error('仓库太大')
+    if (size > MAX_BYTES) throw new Error(t('err.repoTooLarge'))
     chunks.push(Buffer.from(c))
   }
   writeFileSync(file, Buffer.concat(chunks))
@@ -97,7 +98,7 @@ function findPlugin(tree: string, repo: string): string {
   if (found.length === 1) return found[0]
   if (found.length > 1) {
     const rel = found.map((f) => f.slice(tree.length + 1).split(sep).join('/'))
-    throw new Error(`仓库里有 ${found.length} 个插件，选一个装：${rel.slice(0, 5).map((r) => `${repo}/${r}`).join('、')}`)
+    throw new Error(t('err.manyPlugins', { n: found.length, list: rel.slice(0, 5).map((r) => `${repo}/${r}`) }))
   }
   return tree
 }
@@ -123,13 +124,13 @@ export async function installFromGitHub(input: string | Spec, known?: string) {
     // Links could point outside the plugin; a plugin has no need for them.
     await run('find', [tree, '-type', 'l', '-delete'])
     const dir = spec.path ? resolve(tree, spec.path) : findPlugin(tree, spec.repo)
-    if (dir !== tree && !dir.startsWith(tree + sep)) throw new Error('目录不对')
-    if (!isPlugin(dir)) throw new Error(spec.path ? `${spec.path} 下没有 Farline 插件` : '仓库里没有 Farline 插件')
+    if (dir !== tree && !dir.startsWith(tree + sep)) throw new Error(t('err.badPath'))
+    if (!isPlugin(dir)) throw new Error(spec.path ? t('err.noPluginAt', { path: spec.path }) : t('err.noPluginInRepo'))
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
     spec = { ...spec, path: spec.path ?? (dir === tree ? undefined : dir.slice(tree.length + 1).split(sep).join('/')) }
     if (pkg.dependencies && Object.keys(pkg.dependencies).length) {
       await run(npmBin(), ['install', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund', '--no-package-lock'], { cwd: dir, timeout: 180_000 }).catch((e) => {
-        throw new Error(`安装依赖失败：${String(e?.stderr || e?.message || e).trim().split('\n').pop()}`)
+        throw new Error(t('err.depsFailed', { detail: String(e?.stderr || e?.message || e).trim().split('\n').pop() }))
       })
     }
     const remote: RemoteSource = { repo: spec.repo, ...(spec.ref ? { ref: spec.ref } : {}), ...(spec.path ? { path: spec.path } : {}), commit, installedAt: Date.now() }

@@ -1,6 +1,7 @@
 import { ChevronLeft, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { t } from '../i18n.ts'
 
 interface Props {
   title?: ReactNode
@@ -60,7 +61,7 @@ export function Sheet({ title, onClose, onBack, action, footer, size = 'auto', c
         <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           <div className="grabber" />
           <div className="sheet-head">
-            <button className="circle-btn" onClick={onBack ?? onClose} aria-label={onBack ? '返回' : '关闭'}>
+            <button className="circle-btn" onClick={onBack ?? onClose} aria-label={onBack ? t('common.back') : t('common.close')} data-role={onBack ? 'back' : 'close'}>
               {onBack ? <ChevronLeft size={24} strokeWidth={1.8} /> : <X size={22} strokeWidth={1.8} />}
             </button>
             <h2>{title}</h2>

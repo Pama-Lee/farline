@@ -8,6 +8,7 @@ import { useSessions } from '../lib/useSessions.ts'
 import { DeviceSheet } from '../sheets/DeviceSheet.tsx'
 import { FilterSheet, HistorySheet } from '../sheets/ListSheets.tsx'
 import { SettingsSheet } from '../sheets/SettingsSheet.tsx'
+import { t } from '../i18n.ts'
 
 export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout: () => void }) {
   const { sessions, nextOffset, loading, loadMore } = useSessions()
@@ -34,7 +35,7 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
         {searching && (
           <div className="search-bar">
             <Search size={20} color="var(--text-2)" />
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索会话" enterKeyHint="search" />
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('nav.searchSessions')} enterKeyHint="search" />
             <button
               onClick={() => {
                 setSearching(false)
@@ -49,8 +50,8 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
         {!searching && (
           <>
             <div className="section-label">
-              设备
-              <button onClick={() => setSheet('device')} aria-label="新建会话">
+              {t('nav.devices')}
+              <button onClick={() => setSheet('device')} aria-label={t('nav.newSession')}>
                 <Plus size={21} strokeWidth={1.6} color="var(--text)" />
               </button>
             </div>
@@ -64,7 +65,7 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
           </>
         )}
         <div className="section-label" style={{ marginTop: searching ? 0 : 28, marginBottom: 12 }}>
-          <span>{filter ? basename(filter) : '会话'}</span>
+          <span>{filter ? basename(filter) : t('nav.sessions')}</span>
           {filter && (
             <button onClick={() => (setFilter(null), localStorage.removeItem('farline.filter'))}>
               <X size={18} />
@@ -87,18 +88,18 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
                 {basename(s.cwd) || device?.name}
                 <Laptop size={15} strokeWidth={1.7} color="var(--green)" style={{ opacity: s.status === 'idle' ? 0.55 : 1, flex: 'none' }} />
                 {s.providerLabel && <span className="tag">{s.providerLabel}</span>}
-                {!!s.tasks && <span className="tag">后台 {s.tasks}</span>}
+                {!!s.tasks && <span className="tag">{t('nav.inBackground', { n: s.tasks })}</span>}
               </div>
             </span>
           </button>
         ))}
-        {!loading && shown.length === 0 && <div className="empty">没有会话</div>}
+        {!loading && shown.length === 0 && <div className="empty">{t('nav.noSessions')}</div>}
         <div style={{ height: 110 }} />
       </div>
 
       <header className="topbar">
         <div className="left">
-          <button className="circle-btn" onClick={() => setSheet('settings')} aria-label="设置">
+          <button className="circle-btn" onClick={() => setSheet('settings')} aria-label={t('nav.settings')}>
             <TextAlignStart size={22} strokeWidth={1.6} />
           </button>
         </div>
@@ -107,21 +108,21 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
         </div>
         <div className="right">
           <div className="pill-btns">
-            <button onClick={() => setSheet('history')} aria-label="历史">
+            <button onClick={() => setSheet('history')} aria-label={t('nav.history')}>
               <Clock size={21} strokeWidth={1.6} />
             </button>
-            <button onClick={() => setSheet('filter')} aria-label="筛选">
+            <button onClick={() => setSheet('filter')} aria-label={t('nav.filter')}>
               <SlidersVertical size={21} strokeWidth={1.6} />
             </button>
           </div>
         </div>
       </header>
       <div className="fab-row">
-        <button className="circle-btn fab-search" onClick={() => setSearching((v) => !v)} aria-label="搜索">
+        <button className="circle-btn fab-search" onClick={() => setSearching((v) => !v)} aria-label={t('common.search')}>
           <Search size={19} strokeWidth={1.8} />
         </button>
         <button className="black-pill" onClick={() => setSheet('device')}>
-          <Plus size={18} strokeWidth={2} /> 新建会话
+          <Plus size={18} strokeWidth={2} /> {t('nav.newSession')}
         </button>
       </div>
 

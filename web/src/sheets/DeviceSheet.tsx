@@ -6,6 +6,7 @@ import { Spinner, StatusGlyph } from '../components/bits.tsx'
 import { api } from '../lib/api.ts'
 import { relTime, shortPath } from '../lib/format.ts'
 import { navigate } from '../lib/router.ts'
+import { t } from '../i18n.ts'
 
 interface Props {
   device: string
@@ -45,16 +46,16 @@ export function DeviceSheet({ device, cwd, sessions, onCwd, onClose }: Props) {
             navigate(`/new?cwd=${encodeURIComponent(cwd)}`)
           }}
         >
-          <Plus size={19} strokeWidth={2} /> 新建会话
+          <Plus size={19} strokeWidth={2} /> {t('nav.newSession')}
         </button>
       }
     >
-      <div className="field-label">目录</div>
+      <div className="field-label">{t('nav.folders')}</div>
       <button className="row-btn row-fill" onClick={() => setPicking(true)}>
         <span className="grow">{cwd}</span>
         <ChevronRight size={19} color="var(--text-2)" />
       </button>
-      {inDir.length > 0 && <div className="field-label" style={{ marginTop: 22 }}>{inDir.length} 个活跃会话</div>}
+      {inDir.length > 0 && <div className="field-label" style={{ marginTop: 22 }}>{t('device.activeSessions', { n: inDir.length })}</div>}
       {inDir.map((s) => (
         <button
           key={s.id}
@@ -67,7 +68,7 @@ export function DeviceSheet({ device, cwd, sessions, onCwd, onClose }: Props) {
           <div className="top">
             {s.status === 'idle' ? <span className="small-dot" /> : <StatusGlyph status={s.status} />}
             <span className="t">{s.title}</span>
-            <span className="when">{s.status === 'idle' ? relTime(s.updatedAt) : `${s.status === 'requires_action' ? '等待处理' : '处理中'} · ${relTime(s.updatedAt)}`}</span>
+            <span className="when">{s.status === 'idle' ? relTime(s.updatedAt) : `${t(s.status === 'requires_action' ? 'device.waiting' : 'device.working')} · ${relTime(s.updatedAt)}`}</span>
           </div>
           <div className="path">
             <Laptop size={14} strokeWidth={1.7} color="var(--green)" />
@@ -105,14 +106,14 @@ export function DirPicker({ start, onPick, onBack, onClose }: { start: string; o
 
   return (
     <Sheet
-      title="选择目录"
+      title={t('device.chooseFolder')}
       onClose={onClose}
       onBack={onBack}
       size="tall"
       action={
         <button
           className="head-action"
-          aria-label={hidden ? '不显示隐藏文件夹' : '显示隐藏文件夹'}
+          aria-label={t(hidden ? 'device.hideHidden' : 'device.showHidden')}
           onClick={() => {
             localStorage.setItem('farline.hiddenDirs', hidden ? '0' : '1')
             setHidden(!hidden)
@@ -123,7 +124,7 @@ export function DirPicker({ start, onPick, onBack, onClose }: { start: string; o
       }
       footer={
         <button className="black-pill" disabled={!listing} onClick={() => listing && onPick(listing.path)}>
-          使用此目录
+          {t('device.useFolder')}
         </button>
       }
     >
@@ -154,7 +155,7 @@ export function DirPicker({ start, onPick, onBack, onClose }: { start: string; o
           {listing.parent && (
             <button className="option" onClick={() => setPath(listing.parent!)}>
               <CornerLeftUp size={19} color="var(--text-2)" />
-              <span className="grow">上一级</span>
+              <span className="grow">{t('device.up')}</span>
             </button>
           )}
           {listing.dirs.map((d) => (
@@ -164,7 +165,7 @@ export function DirPicker({ start, onPick, onBack, onClose }: { start: string; o
               <ChevronRight size={17} color="var(--text-3)" />
             </button>
           ))}
-          {listing.dirs.length === 0 && <div className="empty">没有子目录</div>}
+          {listing.dirs.length === 0 && <div className="empty">{t('device.noSubfolders')}</div>}
         </div>
       )}
     </Sheet>

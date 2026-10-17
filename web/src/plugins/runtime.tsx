@@ -10,6 +10,7 @@ import { Spinner, toast } from '../components/bits.tsx'
 import { CATALOG_CHANGED } from '../lib/api.ts'
 import { navigate } from '../lib/router.ts'
 import type { FarlineApp, SessionAction, ToolRendererProps, WebPlugin } from './types.ts'
+import { locale, t, tx } from '../i18n.ts'
 
 // The import map in index.html points 'react' and friends at small modules
 // that read these, so plugins share the page's React.
@@ -70,6 +71,7 @@ function makeApp(id: string, cleanups: (() => void)[]): FarlineApp {
     fetch: (path, init = {}) => {
       const headers = new Headers(init.headers)
       headers.set('x-farline', '1')
+      headers.set('x-farline-lang', locale())
       if (typeof init.body === 'string' && !headers.has('content-type')) headers.set('content-type', 'application/json')
       return fetch(`/api/ext/${id}${path.startsWith('/') ? path : `/${path}`}`, { ...init, headers, credentials: 'same-origin' })
     },
@@ -77,6 +79,10 @@ function makeApp(id: string, cleanups: (() => void)[]): FarlineApp {
     registerSessionAction: (action) => keep(add('sessionActions', { ...action, pluginId: id })),
     registerSettingsPanel: (component) => keep(add('settingsPanels', { pluginId: id, component })),
     refreshCatalog: () => window.dispatchEvent(new Event(CATALOG_CHANGED)),
+    get locale() {
+      return locale()
+    },
+    t: (text) => tx(text),
   }
 }
 
@@ -214,7 +220,7 @@ export class PluginBoundary extends Component<{ pluginId: string; fallback?: Rea
     console.error(`[plugin ${this.props.pluginId}]`, error, info.componentStack)
   }
   render() {
-    if (this.state.failed) return this.props.fallback ?? <div className="notice error">插件「{this.props.pluginId}」出错了</div>
+    if (this.state.failed) return this.props.fallback ?? <div className="notice error">{t('plugins.crashed', { id: this.props.pluginId })}</div>
     return this.props.children
   }
 }

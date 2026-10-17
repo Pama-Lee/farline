@@ -18,6 +18,7 @@ import { save, state } from './store.ts'
 import { requestTitle } from './titles.ts'
 import { listDirs, loadUpload, saveUpload } from './uploads.ts'
 import type { CreateBody, EffortLevel, Patch, PermissionMode, Provider, SendBody, SessionSummary } from '../../shared/types.ts'
+import { localeMiddleware, t } from './i18n.ts'
 
 if (process.argv[2] === 'set-password') {
   const pw = process.argv[3]
@@ -32,6 +33,7 @@ const EFFORTS: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 const IMAGE_EXT: Record<string, string> = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' }
 
 const app = new Hono()
+app.use('/api/*', localeMiddleware)
 
 app.post('/api/login', login)
 app.post('/api/logout', logout)
@@ -68,18 +70,18 @@ api.get('/plugins/market', async (c) => {
   try {
     return c.json(await marketPlugins(c.req.query('refresh') === '1'))
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '加载失败' }, 502)
+    return c.json({ error: e?.message ?? t('common.loadFailed') }, 502)
   }
 })
 
 api.post('/plugins/install', async (c) => {
   const { source } = await c.req.json<{ source?: string }>().catch(() => ({ source: undefined }))
-  if (!source?.trim()) return c.json({ error: '填 owner/repo 或 GitHub 仓库地址' }, 400)
+  if (!source?.trim()) return c.json({ error: t('err.repoSpec') }, 400)
   try {
     const r = await serially(() => installFromGitHub(source))
-    return c.json(r.updated ? pluginInfo(r.plugin) : { error: '已安装' })
+    return c.json(r.updated ? pluginInfo(r.plugin) : { error: t('err.alreadyInstalled') })
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '安装失败' }, 400)
+    return c.json({ error: e?.message ?? t('plugins.installFailed') }, 400)
   }
 })
 
@@ -91,7 +93,7 @@ api.post('/plugins/:id/update', async (c) => {
     const r = await serially(() => installFromGitHub({ repo: remote.repo, ref: remote.ref, path: remote.path }, remote.commit))
     return c.json({ updated: r.updated, plugin: pluginInfo(r.updated ? r.plugin : p) })
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '更新失败' }, 400)
+    return c.json({ error: e?.message ?? t('plugins.updateFailed') }, 400)
   }
 })
 
@@ -101,7 +103,7 @@ api.delete('/plugins/:id', async (c) => {
   try {
     await uninstall(p)
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '卸载失败' }, 400)
+    return c.json({ error: e?.message ?? t('plugins.uninstallFailed') }, 400)
   }
   return c.json({ ok: true })
 })
@@ -128,7 +130,7 @@ api.put('/plugins/:id/settings', async (c) => {
   try {
     await saveSettings(p, body)
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '保存失败' }, 400)
+    return c.json({ error: e?.message ?? t('common.saveFailed') }, 400)
   }
   return c.json(pluginInfo(p))
 })
@@ -139,7 +141,7 @@ api.post('/plugins/:id/test', async (c) => {
   try {
     await testNotification(p)
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '发送失败' }, 400)
+    return c.json({ error: e?.message ?? t('common.sendFailed') }, 400)
   }
   return c.json({ ok: true })
 })
@@ -201,7 +203,7 @@ api.get('/sessions', async (c) => {
     const st = v.sessionState()
     rows.push({
       id: v.id,
-      title: st.title || '新会话',
+      title: st.title || t('session.newTitle'),
       cwd: st.cwd,
       updatedAt: v.lastActive,
       status: st.status,
@@ -214,7 +216,7 @@ api.get('/sessions', async (c) => {
   const page = rows.slice(offset, offset + limit).map(({ firstPrompt, ...s }) => {
     if (s.title) return s
     requestTitle(s.id, firstPrompt)
-    return { ...s, title: (firstPrompt ?? '').replace(/\s+/g, ' ').slice(0, 40) || '未命名会话' }
+    return { ...s, title: (firstPrompt ?? '').replace(/\s+/g, ' ').slice(0, 40) || t('session.untitled') }
   })
   return c.json({ sessions: page, nextOffset: rows.length > offset + limit ? offset + limit : null })
 })
@@ -222,8 +224,8 @@ api.get('/sessions', async (c) => {
 api.post('/sessions', async (c) => {
   const body = await c.req.json<CreateBody>()
   const dirs = listDirs(body.cwd)
-  if (!dirs) return c.json({ error: '目录不可用' }, 400)
-  if (body.provider && body.provider !== 'claude' && !providerReady(body.provider)) return c.json({ error: `${providerLabel(body.provider)} 不可用` }, 400)
+  if (!dirs) return c.json({ error: t('err.folderUnavailable') }, 400)
+  if (body.provider && body.provider !== 'claude' && !providerReady(body.provider)) return c.json({ error: t('err.providerUnavailable', { name: providerLabel(body.provider) }) }, 400)
   const provider: Provider = body.provider || 'claude'
   const info = catalog().providers.find((p) => p.id === provider)
   const permissionMode = MODES.includes(body.permissionMode) ? body.permissionMode : (info?.defaultPermissionMode ?? 'auto')
@@ -264,13 +266,13 @@ api.get('/sessions/:id/events', async (c) => {
 api.post('/sessions/:id/messages', async (c) => {
   const view = await openView(c.req.param('id'))
   if (!view) return c.json({ error: 'not found' }, 404)
-  if (view.sessionState().status === 'busy_elsewhere') return c.json({ error: '这个会话正在别处运行' }, 409)
+  if (view.sessionState().status === 'busy_elsewhere') return c.json({ error: t('err.runningElsewhere') }, 409)
   const body = await c.req.json<SendBody>()
   if (!body.text?.trim() && !body.uploads?.length) return c.json({ error: 'empty' }, 400)
   try {
     view.send(body.text ?? '', body.uploads)
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '发送失败' }, 400)
+    return c.json({ error: e?.message ?? t('common.sendFailed') }, 400)
   }
   return c.json({ ok: true })
 })
@@ -300,7 +302,7 @@ api.patch('/sessions/:id', async (c) => {
   if (!view) return c.json({ error: 'not found' }, 404)
   if (body.permissionMode && !MODES.includes(body.permissionMode)) return c.json({ error: 'bad mode' }, 400)
   if (body.effort && !EFFORTS.includes(body.effort)) return c.json({ error: 'bad effort' }, 400)
-  if (body.provider && !providerReady(body.provider)) return c.json({ error: `${providerLabel(body.provider)} 不可用` }, 400)
+  if (body.provider && !providerReady(body.provider)) return c.json({ error: t('err.providerUnavailable', { name: providerLabel(body.provider) }) }, 400)
   const provider = body.provider ?? view.meta.provider
   if (body.model && !models().some((m) => m.provider === provider && m.value === body.model)) return c.json({ error: 'bad model' }, 400)
   const classifiers = catalog().providers.find((p) => p.id === provider)?.classifierModels ?? []
@@ -324,11 +326,11 @@ api.get('/sessions/:id/tasks/:taskId/output', async (c) => {
 
 api.post('/sessions/:id/tasks/:taskId/stop', async (c) => {
   const view = cachedView(c.req.param('id'))
-  if (!view?.live) return c.json({ error: '会话进程已经结束' }, 409)
+  if (!view?.live) return c.json({ error: t('err.processEnded') }, 409)
   try {
     await view.stopTask(c.req.param('taskId'))
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '停止失败' }, 400)
+    return c.json({ error: e?.message ?? t('tasks.stopFailed') }, 400)
   }
   return c.json({ ok: true })
 })
@@ -341,37 +343,37 @@ api.post('/sessions/:id/background', async (c) => {
     const ok = (await view?.backgroundTool(toolUseId)) ?? false
     return c.json({ ok }, ok ? 200 : 409)
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '操作失败' }, 400)
+    return c.json({ error: e?.message ?? t('common.failed') }, 400)
   }
 })
 
 api.get('/sessions/:id/rewind/:messageId', async (c) => {
   const view = await openView(c.req.param('id'))
-  if (!view) return c.json({ error: '会话不存在' }, 404)
+  if (!view) return c.json({ error: t('err.sessionNotFound') }, 404)
   return c.json(await view.rewindPreview(c.req.param('messageId')))
 })
 
 api.post('/sessions/:id/rewind', async (c) => {
   const body = await c.req.json<{ messageId?: string; files?: boolean; conversation?: boolean }>().catch(() => ({}) as { messageId?: string; files?: boolean; conversation?: boolean })
   const view = await openView(c.req.param('id'))
-  if (!view) return c.json({ error: '会话不存在' }, 404)
-  if (!body.messageId || (!body.files && !body.conversation)) return c.json({ error: '参数不对' }, 400)
+  if (!view) return c.json({ error: t('err.sessionNotFound') }, 404)
+  if (!body.messageId || (!body.files && !body.conversation)) return c.json({ error: t('err.badRequest') }, 400)
   try {
     return c.json(await view.rewind(body.messageId, { files: !!body.files, conversation: !!body.conversation }))
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '回退失败' }, 409)
+    return c.json({ error: e?.message ?? t('rewind.failed') }, 409)
   }
 })
 
 api.put('/sessions/:id/items/:itemId/text', async (c) => {
   const { text } = await c.req.json<{ text?: unknown }>().catch(() => ({ text: undefined }))
   const view = await openView(c.req.param('id'))
-  if (!view) return c.json({ error: '会话不存在' }, 404)
-  if (typeof text !== 'string') return c.json({ error: '参数不对' }, 400)
+  if (!view) return c.json({ error: t('err.sessionNotFound') }, 404)
+  if (typeof text !== 'string') return c.json({ error: t('err.badRequest') }, 400)
   try {
     await view.editText(c.req.param('itemId'), text)
   } catch (e: any) {
-    return c.json({ error: e?.message ?? '保存失败' }, 409)
+    return c.json({ error: e?.message ?? t('common.saveFailed') }, 409)
   }
   return c.json({ ok: true })
 })
@@ -436,7 +438,7 @@ api.post('/fs/resolve', async (c) => {
 
 api.get('/fs/read', (c) => {
   const r = readPath(c.req.query('path') ?? '')
-  return r ? c.json(r) : c.json({ error: '找不到这个文件' }, 404)
+  return r ? c.json(r) : c.json({ error: t('file.notFound') }, 404)
 })
 
 // The file itself. Never rendered as a page on our origin: text is served as
@@ -458,14 +460,14 @@ api.get('/fs/raw', (c) => {
 
 api.get('/fs', (c) => {
   const listing = listDirs(c.req.query('path'), c.req.query('hidden') === '1')
-  return listing ? c.json(listing) : c.json({ error: '目录不可用' }, 400)
+  return listing ? c.json(listing) : c.json({ error: t('err.folderUnavailable') }, 400)
 })
 
 api.post('/uploads', async (c) => {
   const body = await c.req.parseBody()
   const file = body.file
   if (!(file instanceof File)) return c.json({ error: 'no file' }, 400)
-  if (file.size > 50 * 1024 * 1024) return c.json({ error: '文件过大' }, 413)
+  if (file.size > 50 * 1024 * 1024) return c.json({ error: t('err.fileTooLarge') }, 413)
   return c.json(await saveUpload(file))
 })
 
@@ -488,7 +490,7 @@ api.post('/push/unsubscribe', async (c) => {
   return c.json({ ok: true })
 })
 api.post('/push/test', async (c) => {
-  await notify({ kind: 'test', title: '通知已开启', body: '会话完成或需要你处理时会提醒你', url: '/' })
+  await notify({ kind: 'test', title: t('notify.onTitle'), body: t('notify.onBody'), url: '/' })
   return c.json({ ok: true })
 })
 

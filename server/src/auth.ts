@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { Context, Next } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { config } from './config.ts'
+import { t } from './i18n.ts'
 
 const COOKIE = 'farline'
 const MAX_AGE_S = 180 * 24 * 3600
@@ -69,9 +70,9 @@ export function clientIp(c: Context): string {
 
 export async function login(c: Context) {
   const ip = clientIp(c)
-  if (limited(`ip:${ip}`, 8) || limited('global', 40)) return c.json({ error: '尝试次数过多，请稍后再试' }, 429)
+  if (limited(`ip:${ip}`, 8) || limited('global', 40)) return c.json({ error: t('auth.tooMany') }, 429)
   const { password } = await c.req.json<{ password?: string }>().catch(() => ({ password: undefined }))
-  if (typeof password !== 'string' || !checkPassword(password)) return c.json({ error: '密码不正确' }, 401)
+  if (typeof password !== 'string' || !checkPassword(password)) return c.json({ error: t('auth.wrongPassword') }, 401)
   setCookie(c, COOKIE, issue(), {
     httpOnly: true,
     secure: !config.insecureCookie,

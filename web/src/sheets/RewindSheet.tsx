@@ -4,6 +4,7 @@ import { Sheet } from '../components/Sheet.tsx'
 import { Spinner, toast } from '../components/bits.tsx'
 import { api, type RewindPreview } from '../lib/api.ts'
 import { navigate } from '../lib/router.ts'
+import { t } from '../i18n.ts'
 
 export const DRAFT_EVENT = 'farline:draft'
 
@@ -24,7 +25,7 @@ export function RewindSheet({ sessionId, cwd, messageId, text, onClose }: { sess
 
   const n = preview?.filesChanged?.length ?? 0
   const code = !!preview?.canRewind && n > 0
-  const stat = code ? `${n} 个文件 +${preview!.insertions ?? 0} −${preview!.deletions ?? 0}` : ''
+  const stat = code ? t('rewind.stat', { n, ins: preview!.insertions ?? 0, del: preview!.deletions ?? 0 }) : ''
 
   const run = async (key: string, files: boolean, conversation: boolean) => {
     if (busy) return
@@ -37,10 +38,10 @@ export function RewindSheet({ sessionId, cwd, messageId, text, onClose }: { sess
           navigate(`/new?cwd=${encodeURIComponent(cwd)}`)
         } else setDraft(sessionId, text)
       }
-      toast(files && conversation ? '已回退对话和代码' : files ? '已回退代码' : '已回退对话')
+      toast(t(files && conversation ? 'rewind.doneBoth' : files ? 'rewind.doneCode' : 'rewind.doneConversation'))
       onClose()
     } catch (e: any) {
-      toast(e?.message ?? '回退失败')
+      toast(e?.message ?? t('rewind.failed'))
       setBusy(null)
     }
   }
@@ -53,7 +54,7 @@ export function RewindSheet({ sessionId, cwd, messageId, text, onClose }: { sess
   )
 
   return (
-    <Sheet title="回退到这条消息之前" onClose={onClose}>
+    <Sheet title={t('rewind.title')} onClose={onClose}>
       <div className="rewind-quote">{text}</div>
       {!preview ? (
         <div className="empty">
@@ -61,9 +62,9 @@ export function RewindSheet({ sessionId, cwd, messageId, text, onClose }: { sess
         </div>
       ) : (
         <div className="group">
-          {code && row('both', '回退对话和代码', true, true, stat)}
-          {row('conversation', '只回退对话', false, true)}
-          {code && row('code', '只回退代码', true, false, stat)}
+          {code && row('both', t('rewind.both'), true, true, stat)}
+          {row('conversation', t('rewind.conversation'), false, true)}
+          {code && row('code', t('rewind.code'), true, false, stat)}
         </div>
       )}
     </Sheet>

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SessionSummary } from '../../../shared/types.ts'
 import { api } from './api.ts'
+import { t } from '../i18n.ts'
 
 // Survives remounts (navigating into a session and back on the phone).
 let cache: { sessions: SessionSummary[]; nextOffset: number | null } | null = null
@@ -62,7 +63,7 @@ export function groupByDay(list: SessionSummary[]): [string, SessionSummary[]][]
   const start = new Date()
   start.setHours(0, 0, 0, 0)
   const today = start.getTime()
-  const label = (t: number) => (t >= today ? '今天' : t >= today - 86400_000 ? '昨天' : t >= today - 6 * 86400_000 ? '本周' : t >= today - 29 * 86400_000 ? '本月' : '更早')
+  const label = (at: number) => t(at >= today ? 'time.today' : at >= today - 86400_000 ? 'time.yesterday' : at >= today - 6 * 86400_000 ? 'time.thisWeek' : at >= today - 29 * 86400_000 ? 'time.thisMonth' : 'time.earlier')
   const groups = new Map<string, SessionSummary[]>()
   for (const s of list) {
     const k = label(s.updatedAt)

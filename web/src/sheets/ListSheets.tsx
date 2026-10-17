@@ -4,10 +4,11 @@ import { Sheet } from '../components/Sheet.tsx'
 import { relTime, shortPath } from '../lib/format.ts'
 import { navigate } from '../lib/router.ts'
 import { groupByDay } from '../lib/useSessions.ts'
+import { t } from '../i18n.ts'
 
 export function HistorySheet({ sessions, hasMore, onMore, onClose }: { sessions: SessionSummary[]; hasMore: boolean; onMore: () => void; onClose: () => void }) {
   return (
-    <Sheet title="历史" onClose={onClose} size="tall">
+    <Sheet title={t('nav.history')} onClose={onClose} size="tall">
       {groupByDay(sessions).map(([day, list]) => (
         <div key={day}>
           <div className="group-title">{day}</div>
@@ -30,7 +31,7 @@ export function HistorySheet({ sessions, hasMore, onMore, onClose }: { sessions:
       ))}
       {hasMore && (
         <button className="steps-row" style={{ margin: '16px auto' }} onClick={onMore}>
-          <span>加载更多</span>
+          <span>{t('common.loadMore')}</span>
         </button>
       )}
     </Sheet>
@@ -43,10 +44,10 @@ export function FilterSheet({ cwds, filter, onFilter, onClose }: { cwds: string[
     onClose()
   }
   return (
-    <Sheet title="目录" onClose={onClose}>
+    <Sheet title={t('nav.folders')} onClose={onClose}>
       <div className="group">
         <button className="option" onClick={() => pick(null)}>
-          <span className="grow">全部</span>
+          <span className="grow">{t('common.all')}</span>
           {!filter && <Check size={20} strokeWidth={2.2} className="check" />}
         </button>
         {cwds.map((c) => (

@@ -3,7 +3,9 @@
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
-import type { Disposable, PluginContext, PluginDefinition } from '../../server/src/plugins/types.ts'
+import type { Disposable, Localizer, PluginContext, PluginDefinition } from '../../server/src/plugins/types.ts'
+
+const L = (en: string, zh: string) => ({ en, 'zh-CN': zh })
 
 interface Entry {
   id: string
@@ -28,21 +30,21 @@ function parseModels(v: unknown): string[] {
   return [...new Set(list.map((s) => s.trim()).filter(Boolean))]
 }
 
-async function listModels(baseUrl: string, apiKey: string): Promise<string[]> {
+async function listModels(baseUrl: string, apiKey: string, i18n: Localizer): Promise<string[]> {
   const base = normalize(baseUrl)
   const origin = new URL(base).origin
   // Relays differ in where the list lives; the first that answers wins.
   const urls = [...new Set([`${base}/v1/models`, `${origin}/v1/models`, `${origin}/models`])]
-  let last = '连不上这个地址'
+  let last = i18n.t(L("Can't reach this address", '连不上这个地址'))
   for (const url of urls) {
     const res = await fetch(url, {
       headers: { authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       signal: AbortSignal.timeout(10_000),
     }).catch(() => undefined)
     if (!res) continue
-    if (res.status === 401 || res.status === 403) throw new Error('API key 无效')
+    if (res.status === 401 || res.status === 403) throw new Error(i18n.t(L('Invalid API key', 'API key 无效')))
     if (!res.ok) {
-      last = `接口返回 ${res.status}`
+      last = i18n.t(L(`The API returned ${res.status}`, `接口返回 ${res.status}`))
       continue
     }
     const data = (await res.json().catch(() => ({}))) as { data?: { id?: string }[] }
@@ -54,7 +56,7 @@ async function listModels(baseUrl: string, apiKey: string): Promise<string[]> {
 export default {
   async status(ctx) {
     const n = load(ctx).length
-    return n ? { summary: `${n} 个` } : { summary: '未添加' }
+    return n ? { summary: L(`${n}`, `${n} 个`) } : { summary: L('None yet', '未添加') }
   },
 
   activate(ctx) {
@@ -98,12 +100,12 @@ export default {
       const apiKey = String(body.apiKey ?? '').trim() || prev?.apiKey || ''
       const models = parseModels(body.models)
       const contextWindow = body.contextWindow ? Number(body.contextWindow) : undefined
-      if (!name) return c.json({ error: '填一个名称' }, 400)
-      if (!/^https?:\/\/\S+$/.test(baseUrl)) return c.json({ error: '地址要以 http:// 或 https:// 开头' }, 400)
-      if (!apiKey) return c.json({ error: '填 API key' }, 400)
-      if (!models.length) return c.json({ error: '至少填一个模型' }, 400)
+      if (!name) return c.json({ error: ctx.t(L('Enter a name', '填一个名称')) }, 400)
+      if (!/^https?:\/\/\S+$/.test(baseUrl)) return c.json({ error: ctx.t(L('The address must start with http:// or https://', '地址要以 http:// 或 https:// 开头')) }, 400)
+      if (!apiKey) return c.json({ error: ctx.t(L('Enter an API key', '填 API key')) }, 400)
+      if (!models.length) return c.json({ error: ctx.t(L('Add at least one model', '至少填一个模型')) }, 400)
       if (contextWindow !== undefined && !(contextWindow >= 100_000 && contextWindow <= 1_000_000)) {
-        return c.json({ error: '上下文长度要在 100000 到 1000000 之间' }, 400)
+        return c.json({ error: ctx.t(L('Context length must be between 100000 and 1000000', '上下文长度要在 100000 到 1000000 之间')) }, 400)
       }
       const entry: Entry = { id: prev?.id ?? `c-${randomBytes(3).toString('hex')}`, name, baseUrl, apiKey, models, contextWindow }
       save(ctx, prev ? all.map((e) => (e.id === prev.id ? entry : e)) : [...all, entry])
@@ -122,9 +124,9 @@ export default {
       const body = await c.req.json<{ id?: string; baseUrl?: string; apiKey?: string }>().catch(() => ({}) as any)
       const prev = load(ctx).find((e) => e.id === body.id)
       const apiKey = body.apiKey?.trim() || prev?.apiKey || ''
-      if (!body.baseUrl || !apiKey) return c.json({ error: '先填地址和 API key' }, 400)
+      if (!body.baseUrl || !apiKey) return c.json({ error: ctx.t(L('Enter the address and API key first', '先填地址和 API key')) }, 400)
       try {
-        return c.json({ models: await listModels(body.baseUrl, apiKey) })
+        return c.json({ models: await listModels(body.baseUrl, apiKey, ctx) })
       } catch (e: any) {
         return c.json({ error: e.message }, 400)
       }

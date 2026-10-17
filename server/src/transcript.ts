@@ -149,7 +149,7 @@ export class ItemLog {
     const imageCount = Array.isArray(b.content) ? b.content.filter((c: Block) => c.type === 'image').length : 0
     const images = Array.from({ length: imageCount }, (_, i) => ({ url: `/api/sessions/${this.sessionId}/tool-images/${b.tool_use_id}/${i}` }))
     let text = typeof b.content === 'string' ? b.content : Array.isArray(b.content)
-      ? b.content.map((c: Block) => (c.type === 'text' ? c.text : c.type === 'image' ? '[图片]' : '')).join('\n')
+      ? b.content.map((c: Block) => (c.type === 'text' ? c.text : c.type === 'image' ? '[image]' : '')).join('\n')
       : ''
     const truncated = text.length > RESULT_LIMIT
     if (truncated) text = text.slice(0, RESULT_LIMIT)
@@ -168,7 +168,7 @@ export class ItemLog {
     let text = blocks.filter((b) => b.type === 'text').map((b) => b.text as string).join('\n')
     const imageCount = blocks.filter((b) => b.type === 'image').length
     if (/^\s*\[Request interrupted/.test(text)) {
-      this.upsert({ kind: 'notice', id: uuid, level: 'info', text: '已中断' })
+      this.upsert({ kind: 'notice', id: uuid, level: 'info', text: 'Interrupted', code: 'interrupted' })
       return
     }
     if (/^\s*<task-notification>/.test(text)) return this.applyTaskNotifications(uuid, text, ts)
@@ -181,7 +181,7 @@ export class ItemLog {
     }
     text = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()
     const files: string[] = []
-    text = text.replace(/^\[附件\] (.+)$/gm, (_, p) => (files.push(p), '')).trim()
+    text = text.replace(/^\[(?:附件|Attachment)\] (.+)$/gm, (_, p) => (files.push(p), '')).trim()
     if (!text && !imageCount && !files.length) return
     const images = Array.from({ length: imageCount }, (_, i) => ({ url: `/api/sessions/${this.sessionId}/images/${uuid}/${i}` }))
     this.upsert({ kind: 'user', id: uuid, text, images: images.length ? images : undefined, files: files.length ? files : undefined, ts })

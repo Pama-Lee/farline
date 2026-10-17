@@ -2,6 +2,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Spinner, toast } from './bits.tsx'
 import { api } from '../lib/api.ts'
+import { t } from '../i18n.ts'
 
 export function ReplyEditor({ sessionId, itemId, text, select, onDone }: { sessionId: string; itemId: string; text: string; select?: string; onDone: () => void }) {
   const [value, setValue] = useState(text)
@@ -32,10 +33,10 @@ export function ReplyEditor({ sessionId, itemId, text, select, onDone }: { sessi
     setSaving(true)
     try {
       await api.editText(sessionId, itemId, value)
-      toast('已保存')
+      toast(t('common.saved'))
       onDone()
     } catch (e: any) {
-      toast(e?.message ?? '保存失败')
+      toast(e?.message ?? t('common.saveFailed'))
       setSaving(false)
     }
   }
@@ -60,10 +61,10 @@ export function ReplyEditor({ sessionId, itemId, text, select, onDone }: { sessi
       />
       <div className="re-actions">
         <button className="re-btn" onClick={onDone} disabled={saving}>
-          取消
+          {t('common.cancel')}
         </button>
         <button className="re-btn primary" onClick={() => void save()} disabled={saving || !value.trim()}>
-          {saving ? <Spinner size={15} /> : '保存'}
+          {saving ? <Spinner size={15} /> : t('common.save')}
         </button>
       </div>
     </div>

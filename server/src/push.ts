@@ -4,8 +4,9 @@ import webpush from 'web-push'
 import { config } from './config.ts'
 import { absoluteUrl } from './origin.ts'
 import { allChannels } from './plugins/registry.ts'
-import type { Notification } from './plugins/types.ts'
+import type { Notification, Text } from './plugins/types.ts'
 import { save, state, type PushSub } from './store.ts'
+import { tx } from './i18n.ts'
 
 const keyFile = join(config.dataDir, 'vapid.json')
 if (!existsSync(keyFile)) writeFileSync(keyFile, JSON.stringify(webpush.generateVAPIDKeys()), { mode: 0o600 })
@@ -29,11 +30,11 @@ export async function notify(n: Notification) {
   await Promise.all([webPush(n), ...allChannels().map((ch) => sendTo(ch, n))])
 }
 
-export async function sendTo(ch: { label: string; send(n: Notification): Promise<void> }, n: Notification) {
+export async function sendTo(ch: { label: Text; send(n: Notification): Promise<void> }, n: Notification) {
   try {
     await ch.send({ ...n, url: absoluteUrl(n.url) })
   } catch (err: any) {
-    console.error(`notification via ${ch.label} failed:`, err?.message ?? err)
+    console.error(`notification via ${tx(ch.label)} failed:`, err?.message ?? err)
     if (n.kind === 'test') throw err
   }
 }

@@ -24,6 +24,7 @@ import { memo, useContext, useEffect, useMemo, useRef } from 'react'
 import { FileLinkContext, isLocalHref, looksLikePath, openFile, pushFile, resolveFiles } from '../lib/files.ts'
 import { openViewer } from '../lib/viewer.ts'
 import { toast } from './bits.tsx'
+import { t } from '../i18n.ts'
 
 const langs = { bash, cpp, css, diff, dockerfile, go, ini, java, javascript, json, kotlin, markdown, python, rust, sql, swift, typescript, xml, yaml }
 for (const [name, lang] of Object.entries(langs)) hljs.registerLanguage(name, lang)
@@ -138,7 +139,7 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
         const a = el.closest('a')
         if (a && isLocalHref(a.getAttribute('href') ?? '')) {
           e.preventDefault()
-          if (a.dataset.missing) toast('找不到这个文件')
+          if (a.dataset.missing) toast(t('file.notFound'))
           return
         }
         if (el.tagName !== 'IMG') return

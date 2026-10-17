@@ -25,6 +25,7 @@ import { SelectionMenu } from '../components/SelectionMenu.tsx'
 import { useInlineSteps } from '../lib/prefs.ts'
 import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
 import { collectTasks, type TaskView } from '../lib/tasks.ts'
+import { t, tx } from '../i18n.ts'
 
 interface Props {
   id: string | null
@@ -78,7 +79,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const fileScope = useMemo(() => (id ? { sessionId: id } : null), [id])
   const blocks = useMemo(() => toBlocks(items), [items])
   const tasks = useMemo(() => collectTasks(items, state?.tasks ?? []), [items, state?.tasks])
-  const runningTasks = tasks.filter((t) => t.status === 'running').length
+  const runningTasks = tasks.filter((x) => x.status === 'running').length
   const pendingPerm = items.find((it): it is ToolItem => it.kind === 'tool' && it.permission?.status === 'pending')
 
   useEffect(() => {
@@ -89,8 +90,8 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
 
   useEffect(() => {
     if (status !== 'busy_elsewhere' || !id) return
-    const t = setInterval(() => document.visibilityState === 'visible' && session.refresh(), 6000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => document.visibilityState === 'visible' && session.refresh(), 6000)
+    return () => clearInterval(timer)
   }, [status, id, session.refresh])
 
   // The thread scrolls under the floating composer; pad by its height.
@@ -129,7 +130,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
     if (!id) return setDraft((d) => ({ ...d, provider: m.provider, model: m.value, mode: m.provider === d.provider ? d.mode : defaultMode(providers, m.provider, d.mode) }))
     try {
       session.setState(await api.update(id, m.provider === provider ? { model: m.value } : { provider: m.provider, model: m.value }))
-      if (m.provider !== provider) toast(`已切换到 ${m.label}`)
+      if (m.provider !== provider) toast(t('composer.switchedTo', { model: m.label }))
     } catch (e: any) {
       toast(e.message)
     }
@@ -171,7 +172,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
 
   const lastUserTs = [...items].reverse().find((it) => it.kind === 'user')?.ts
   const streamingText = items.some((it) => it.kind === 'text' && it.streaming)
-  const title = state?.title || (id ? '' : '新会话')
+  const title = state?.title || (id ? '' : t('session.newTitle'))
 
   return (
     <FileLinkContext.Provider value={fileScope}>
@@ -187,7 +188,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
           <div className="thread" style={{ paddingBottom: 'calc(var(--composer-h, 120px) + 16px)' }}>
             {session.hasEarlier && (
               <button className="steps-row" style={{ margin: '4px auto 12px' }} onClick={session.loadAll}>
-                <span className="lbl">加载更早的消息</span>
+                <span className="lbl">{t('session.loadEarlier')}</span>
               </button>
             )}
             {id && !state && !session.error && (
@@ -220,7 +221,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                 return (
                   <div className="msg-text" key={b.item.id} data-item={editable ? b.item.id : undefined}>
                     <Markdown text={b.item.text} />
-                    {b.item.edited && <div className="edited-tag">已编辑</div>}
+                    {b.item.edited && <div className="edited-tag">{t('session.edited')}</div>}
                     {b.last && !b.item.streaming && !(busy && i === blocks.length - 1) && (
                       <MsgActions text={b.item.text} onEdit={editable ? () => setEditing({ id: b.item.id }) : undefined} />
                     )}
@@ -244,10 +245,10 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                 )
               if (b.type === 'ask') return <AskCard key={b.item.id} item={b.item} sessionId={id!} />
               if (b.type === 'task')
-                return <TaskRow key={b.item.id} item={b.item} task={tasks.find((t) => t.id === b.item.taskId)} onOpen={() => setTaskSheet({ openId: b.item.taskId })} />
+                return <TaskRow key={b.item.id} item={b.item} task={tasks.find((x) => x.id === b.item.taskId)} onOpen={() => setTaskSheet({ openId: b.item.taskId })} />
               return (
                 <div key={b.item.id} className={`notice${b.item.level === 'error' ? ' error' : ''}`}>
-                  {b.item.text}
+                  {b.item.code ? t(`notice.${b.item.code}`) : b.item.text}
                 </div>
               )
             })}
@@ -257,7 +258,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
 
         <header className="topbar">
           <div className="left">
-            <button className="circle-btn" onClick={back} aria-label="返回">
+            <button className="circle-btn" onClick={back} aria-label={t('common.back')}>
               <ChevronLeft size={25} strokeWidth={1.8} />
             </button>
           </div>
@@ -278,7 +279,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
               </span>
             )}
             {id && (
-              <button className="circle-btn" onClick={() => setMenu(true)} aria-label="更多">
+              <button className="circle-btn" onClick={() => setMenu(true)} aria-label={t('common.more')}>
                 <MoreHorizontal size={22} strokeWidth={2} />
               </button>
             )}
@@ -289,13 +290,13 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
           {runningTasks > 0 && (
             <button className="tasks-pill" onClick={() => setTaskSheet({ openId: null })}>
               <Spinner size={14} />
-              {runningTasks} 个后台任务
+              {t('session.backgroundTasks', { n: runningTasks })}
             </button>
           )}
           {pendingPerm && id && <PermissionCard tool={pendingPerm} sessionId={id} />}
           {status === 'busy_elsewhere' ? (
             <div className="busy-note">
-              <span className="ring" style={{ width: 16, height: 16, borderWidth: 2 }} /> 正在别处运行
+              <span className="ring" style={{ width: 16, height: 16, borderWidth: 2 }} /> {t('session.runningElsewhere')}
             </div>
           ) : (
             <Composer
@@ -427,7 +428,7 @@ function StepsRow(p: { items: StepItem[]; live: boolean; sessionId: string | nul
       {images.length > 0 && (
         <div className="thumbs">
           {images.map((im, i) => (
-            <button key={im.url} onClick={() => openViewer(images, i)} aria-label="查看图片">
+            <button key={im.url} onClick={() => openViewer(images, i)} aria-label={t('common.viewImage')}>
               <img src={im.url} loading="lazy" alt="" />
             </button>
           ))}
@@ -440,7 +441,7 @@ function StepsRow(p: { items: StepItem[]; live: boolean; sessionId: string | nul
 function TaskRow({ item, task, onOpen }: { item: TaskItem; task?: TaskView; onOpen: () => void }) {
   // No status: a monitor reporting an event rather than an ending.
   const event = !item.status
-  const label = event ? '监控' : item.status === 'completed' ? '后台任务已完成' : item.status === 'failed' ? '后台任务失败' : '后台任务已停止'
+  const label = t(event ? 'session.monitor' : item.status === 'completed' ? 'session.taskCompleted' : item.status === 'failed' ? 'session.taskFailed' : 'session.taskStopped')
   const detail = event ? item.summary.replace(/^Monitor event:\s*/, '') : task?.description || item.summary
   return (
     <button className="steps-row task-row" onClick={onOpen}>
@@ -457,11 +458,11 @@ function Thinking({ since }: { since?: number }) {
   const start = useRef(since && Date.now() - since < 3600_000 ? since : Date.now())
   const [, tick] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => tick((n) => n + 1), 1000)
-    return () => clearInterval(t)
+    const timer = setInterval(() => tick((n) => n + 1), 1000)
+    return () => clearInterval(timer)
   }, [])
   const secs = Math.max(0, Math.floor((Date.now() - start.current) / 1000))
-  const elapsed = secs >= 60 ? `${Math.floor(secs / 60)}分${secs % 60}秒` : `${secs}秒`
+  const elapsed = t('time.duration', { secs })
   return (
     <div className="thinking">
       <span className="dots">
@@ -469,7 +470,7 @@ function Thinking({ since }: { since?: number }) {
         <i />
         <i />
       </span>
-      {elapsed} · {secs < 20 ? '正在思考…' : '仍在思考…'}
+      {elapsed} · {t(secs < 20 ? 'session.thinking' : 'session.stillThinking')}
     </div>
   )
 }
@@ -483,7 +484,7 @@ function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; on
       {item.images && (
         <div className="msg-images">
           {item.images.map((im, i) => (
-            <button key={im.url} onClick={() => openViewer(item.images!, i)} aria-label="查看图片">
+            <button key={im.url} onClick={() => openViewer(item.images!, i)} aria-label={t('common.viewImage')}>
               <img src={im.url} loading="lazy" alt="" />
             </button>
           ))}
@@ -504,16 +505,16 @@ function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; on
           <button
             onClick={async () => {
               await copyText(item.text)
-              toast('已复制')
+              toast(t('common.copied'))
             }}
-            aria-label="复制"
-            title="复制"
+            aria-label={t('common.copy')}
+            title={t('common.copy')}
           >
             <Copy size={16} strokeWidth={1.6} />
           </button>
         )}
         {onRewind && (
-          <button onClick={onRewind} aria-label="回退到这里" title="回退到这里">
+          <button onClick={onRewind} aria-label={t('session.rewindHere')} title={t('session.rewindHere')}>
             <Undo2 size={16} strokeWidth={1.6} />
           </button>
         )}
@@ -544,17 +545,17 @@ function MsgActions({ text, onEdit }: { text: string; onEdit?: () => void }) {
       <button
         onClick={async () => {
           await copyText(text)
-          toast('已复制')
+          toast(t('common.copied'))
         }}
-        aria-label="复制"
+        aria-label={t('common.copy')}
       >
         <Copy size={17} strokeWidth={1.6} />
       </button>
-      <button onClick={speak} aria-label="朗读">
+      <button onClick={speak} aria-label={t('session.readAloud')}>
         {speaking ? <Square size={17} strokeWidth={1.7} /> : <Play size={17} strokeWidth={1.6} />}
       </button>
       {onEdit && (
-        <button onClick={onEdit} aria-label="编辑" title="编辑">
+        <button onClick={onEdit} aria-label={t('common.edit')} title={t('common.edit')}>
           <PencilLine size={17} strokeWidth={1.6} />
         </button>
       )}
@@ -572,11 +573,11 @@ function AskCard({ item, sessionId }: { item: AskItem; sessionId: string }) {
     const answers = parseAnswers(item.answer)
     return (
       <div className="ask-card">
-        <div className="label">问题</div>
+        <div className="label">{t('ask.question')}</div>
         {item.questions.map((q) => (
           <div key={q.question}>
             <div className="q">{q.question}</div>
-            <div className="a">{answers[q.question] ?? (item.status === 'cancelled' ? '已跳过' : '')}</div>
+            <div className="a">{answers[q.question] ?? (item.status === 'cancelled' ? t('ask.skipped') : '')}</div>
           </div>
         ))}
       </div>
@@ -599,7 +600,7 @@ function AskCard({ item, sessionId }: { item: AskItem; sessionId: string }) {
 
   return (
     <div className="ask-card">
-      <div className="label">问题</div>
+      <div className="label">{t('ask.question')}</div>
       {item.questions.map((q) => (
         <div key={q.question} style={{ marginBottom: 16 }}>
           <div className="q active">{q.question}</div>
@@ -624,15 +625,15 @@ function AskCard({ item, sessionId }: { item: AskItem; sessionId: string }) {
               )
             })}
           </div>
-          <textarea rows={1} placeholder="其他" value={other[q.question] ?? ''} onChange={(e) => setOther((o) => ({ ...o, [q.question]: e.target.value }))} />
+          <textarea rows={1} placeholder={t('ask.other')} value={other[q.question] ?? ''} onChange={(e) => setOther((o) => ({ ...o, [q.question]: e.target.value }))} />
         </div>
       ))}
       <div className="btn-row">
         <button className="btn" disabled={sending} onClick={() => submit(true)}>
-          跳过
+          {t('ask.skip')}
         </button>
         <button className="btn primary" disabled={!ready || sending} onClick={() => submit()}>
-          提交
+          {t('ask.submit')}
         </button>
       </div>
     </div>
@@ -653,22 +654,22 @@ function parseAnswers(text?: string): Record<string, string> {
   return out
 }
 
-function permissionText(t: ToolItem): { head: string; body: string } {
-  const i = t.input as Record<string, any>
-  switch (t.name) {
+function permissionText(tool: ToolItem): { head: string; body: string } {
+  const i = tool.input as Record<string, any>
+  switch (tool.name) {
     case 'Bash':
-      return { head: '允许运行命令？', body: i.command ?? '' }
+      return { head: t('perm.runCommand'), body: i.command ?? '' }
     case 'Write':
-      return { head: '允许写入文件？', body: i.file_path ?? '' }
+      return { head: t('perm.writeFile'), body: i.file_path ?? '' }
     case 'Edit':
     case 'MultiEdit':
-      return { head: '允许编辑文件？', body: i.file_path ?? '' }
+      return { head: t('perm.editFile'), body: i.file_path ?? '' }
     case 'WebFetch':
-      return { head: '允许打开网页？', body: i.url ?? '' }
+      return { head: t('perm.openUrl'), body: i.url ?? '' }
     case 'ExitPlanMode':
-      return { head: '按这个计划开始执行？', body: i.plan ?? '' }
+      return { head: t('perm.startPlan'), body: i.plan ?? '' }
     default:
-      return { head: `允许使用 ${t.name.replace(/^mcp__(.+?)__/, '$1 · ')}？`, body: JSON.stringify(i, null, 2) }
+      return { head: t('perm.useTool', { tool: tool.name.replace(/^mcp__(.+?)__/, '$1 · ') }), body: JSON.stringify(i, null, 2) }
   }
 }
 
@@ -693,15 +694,15 @@ function PermissionCard({ tool, sessionId }: { tool: ToolItem; sessionId: string
       {body && <pre>{body}</pre>}
       <div className="btn-row">
         <button className="btn" disabled={sending} onClick={() => decide('deny')}>
-          拒绝
+          {t('perm.deny')}
         </button>
         <button className="btn primary" disabled={sending} onClick={() => decide('allow')}>
-          允许
+          {t('perm.allow')}
         </button>
       </div>
       {perm.canAlways && (
         <button className="always" disabled={sending} onClick={() => decide('always')}>
-          始终允许
+          {t('perm.always')}
         </button>
       )}
     </div>
@@ -721,7 +722,7 @@ function useDictation(onText: (t: string) => void) {
   const rec = useRef<any>(null)
   const Ctor = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
   const toggle = () => {
-    if (!Ctor) return toast('这台设备不支持语音输入')
+    if (!Ctor) return toast(t('composer.noDictation'))
     if (on) {
       rec.current?.stop()
       return
@@ -780,7 +781,7 @@ function Composer(p: {
   const [menuAt, setMenuAt] = useState<DOMRect | null>(null)
   const [sending, setSending] = useState(false)
   const ta = useRef<HTMLTextAreaElement>(null)
-  const dictation = useDictation((t) => setText((cur) => (cur ? `${cur}${t}` : t)))
+  const dictation = useDictation((said) => setText((cur) => (cur ? `${cur}${said}` : said)))
 
   // Grow with the text; scroll only past the cap. Measured again when the
   // box changes width or a skin changes its padding.
@@ -825,7 +826,7 @@ function Composer(p: {
           const up = await api.upload(blob, name)
           setAtts((a) => a.map((x) => (x.key === key ? { ...x, uploadId: up.id } : x)))
         } catch (e: any) {
-          toast(e?.message ?? '上传失败')
+          toast(e?.message ?? t('composer.uploadFailed'))
           setAtts((a) => a.map((x) => (x.key === key ? { ...x, failed: true } : x)))
         }
       })()
@@ -846,7 +847,7 @@ function Composer(p: {
       atts.forEach((a) => a.preview && URL.revokeObjectURL(a.preview))
       setAtts([])
     } catch (e: any) {
-      toast(e?.message ?? '发送失败')
+      toast(e?.message ?? t('common.sendFailed'))
     } finally {
       setSending(false)
     }
@@ -871,7 +872,7 @@ function Composer(p: {
                   <Spinner size={18} />
                 </div>
               )}
-              <button className="x" onClick={() => setAtts((all) => all.filter((x) => x.key !== a.key))} aria-label="移除">
+              <button className="x" onClick={() => setAtts((all) => all.filter((x) => x.key !== a.key))} aria-label={t('common.remove')}>
                 <X size={14} />
               </button>
             </div>
@@ -887,7 +888,7 @@ function Composer(p: {
         data-gramm="false"
         data-gramm_editor="false"
         data-enable-grammarly="false"
-        placeholder={p.sessionId ? '回复' : '要做什么'}
+        placeholder={t(p.sessionId ? 'composer.reply' : 'composer.newPrompt')}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return
@@ -906,7 +907,7 @@ function Composer(p: {
         }}
       />
       <div className="bar">
-        <button className="round" onClick={() => setSheet('context')} aria-label="添加">
+        <button className="round" onClick={() => setSheet('context')} aria-label={t('composer.add')}>
           <Plus size={21} strokeWidth={1.8} />
         </button>
         <button
@@ -921,15 +922,15 @@ function Composer(p: {
           {p.effort && <span className="eff">{EFFORT_LABELS[p.effort]}</span>}
         </button>
         <span className="spacer" />
-        <button className={`round mic${dictation.on ? ' on' : ''}`} onClick={dictation.toggle} aria-label="语音输入">
+        <button className={`round mic${dictation.on ? ' on' : ''}`} onClick={dictation.toggle} aria-label={t('composer.dictate')}>
           <Mic size={19} strokeWidth={1.8} />
         </button>
         {p.busy && !hasContent ? (
-          <button className="round stop" onClick={p.onStop} aria-label="停止">
+          <button className="round stop" onClick={p.onStop} aria-label={t('composer.stop')}>
             <Square size={14} fill="currentColor" />
           </button>
         ) : (
-          <button className="round send" disabled={!ready} onClick={() => void submit()} aria-label="发送">
+          <button className="round send" disabled={!ready} onClick={() => void submit()} aria-label={t('composer.send')}>
             {sending ? <Spinner size={18} /> : <ArrowUp size={21} strokeWidth={2.4} />}
           </button>
         )}
@@ -975,7 +976,7 @@ function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: S
   if (renaming)
     return (
       <Sheet
-        title="重命名"
+        title={t('session.rename')}
         onClose={onClose}
         onBack={() => setRenaming(false)}
         footer={
@@ -987,7 +988,7 @@ function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: S
               onClose()
             }}
           >
-            保存
+            {t('common.save')}
           </button>
         }
       >
@@ -998,12 +999,12 @@ function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: S
     <Sheet title={state.title} onClose={onClose}>
       <button className="row-btn" onClick={() => setRenaming(true)}>
         <PencilLine size={19} strokeWidth={1.6} />
-        <span className="grow">重命名</span>
+        <span className="grow">{t('session.rename')}</span>
       </button>
       {taskCount > 0 && (
         <button className="row-btn" onClick={onTasks}>
           <ListChecks size={19} strokeWidth={1.6} />
-          <span className="grow">后台任务</span>
+          <span className="grow">{t('session.tasks')}</span>
           <span className="value">{taskCount}</span>
         </button>
       )}
@@ -1011,12 +1012,12 @@ function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: S
         className="row-btn"
         onClick={async () => {
           await copyText(state.id)
-          toast('已复制会话 ID')
+          toast(t('session.idCopied'))
           onClose()
         }}
       >
         <Copy size={19} strokeWidth={1.6} />
-        <span className="grow">复制会话 ID</span>
+        <span className="grow">{t('session.copyId')}</span>
       </button>
       <button
         className="row-btn"
@@ -1027,12 +1028,12 @@ function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: S
         }}
       >
         <EyeOff size={19} strokeWidth={1.6} />
-        <span className="grow">从列表隐藏</span>
+        <span className="grow">{t('session.hide')}</span>
       </button>
       {state.status === 'busy_elsewhere' && (
         <button className="row-btn" onClick={() => location.reload()}>
           <RefreshCw size={19} strokeWidth={1.6} />
-          <span className="grow">刷新</span>
+          <span className="grow">{t('common.refresh')}</span>
         </button>
       )}
       {sessionActions.map((a, i) => (
@@ -1044,12 +1045,12 @@ function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: S
               try {
                 await a.run(state)
               } catch (e: any) {
-                toast(e?.message ?? '操作失败')
+                toast(e?.message ?? t('common.failed'))
               }
             }}
           >
             {a.icon ?? <Puzzle size={19} strokeWidth={1.6} />}
-            <span className="grow">{a.label}</span>
+            <span className="grow">{tx(a.label)}</span>
           </button>
         </PluginBoundary>
       ))}

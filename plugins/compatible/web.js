@@ -5,10 +5,11 @@ const EMPTY = { name: '', baseUrl: '', apiKey: '', models: '', contextWindow: ''
 
 /** @param {import('../../web/src/plugins/types.ts').FarlineApp} app */
 export function activate(app) {
+  const L = (en, zh) => app.t({ en, 'zh-CN': zh })
   const call = async (path, init) => {
     const res = await app.fetch(path, init)
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.error || `请求失败 (${res.status})`)
+    if (!res.ok) throw new Error(data.error || L(`Request failed (${res.status})`, `请求失败 (${res.status})`))
     return data
   }
 
@@ -33,18 +34,18 @@ export function activate(app) {
       run(async () => {
         await call(`/providers/${entry?.id ?? 'new'}`, { method: 'PUT', body: JSON.stringify(f) })
         app.refreshCatalog()
-        app.toast('已保存')
+        app.toast(L('Saved', '已保存'))
         onDone()
       })
     const test = () =>
       run(async () => {
         const { models } = await call('/test', { method: 'POST', body: JSON.stringify({ id: entry?.id, baseUrl: f.baseUrl, apiKey: f.apiKey }) })
         setFound(models)
-        app.toast(models.length ? `连接正常，${models.length} 个模型` : '连接正常')
+        app.toast(models.length ? L(`Connected, ${models.length} models`, `连接正常，${models.length} 个模型`) : L('Connected', '连接正常'))
       })
     const remove = () =>
       run(async () => {
-        if (!confirm(`确认删除「${entry.name}」？`)) return
+        if (!confirm(L(`Delete "${entry.name}"?`, `确认删除「${entry.name}」？`))) return
         await call(`/providers/${entry.id}`, { method: 'DELETE' })
         app.refreshCatalog()
         onDone()
@@ -57,10 +58,10 @@ export function activate(app) {
     return h(
       'div',
       { className: 'plugin-form' },
-      field('名称', 'name', { placeholder: 'Kimi' }),
-      field('接口地址', 'baseUrl', { placeholder: 'https://example.com/v1', inputMode: 'url' }),
+      field(L('Name', '名称'), 'name', { placeholder: 'Kimi' }),
+      field(L('API address', '接口地址'), 'baseUrl', { placeholder: 'https://example.com/v1', inputMode: 'url' }),
       field('API key', 'apiKey', { type: 'password', placeholder: entry?.keyHint || '' }),
-      field('模型', 'models', { placeholder: 'model-a, model-b' }),
+      field(L('Models', '模型'), 'models', { placeholder: 'model-a, model-b' }),
       found &&
         found.length > 0 &&
         h(
@@ -68,15 +69,15 @@ export function activate(app) {
           { className: 'chips', style: { margin: '-2px 0 12px' } },
           found.map((m) => h('button', { key: m, type: 'button', className: `chip${chosen.includes(m) ? ' on' : ''}`, onClick: () => toggle(m) }, m)),
         ),
-      field('上下文长度', 'contextWindow', { placeholder: '200000', inputMode: 'numeric' }),
-      h('button', { className: 'black-pill wide', disabled: busy, onClick: save }, busy ? '…' : '保存'),
+      field(L('Context length', '上下文长度'), 'contextWindow', { placeholder: '200000', inputMode: 'numeric' }),
+      h('button', { className: 'black-pill wide', disabled: busy, onClick: save }, busy ? '…' : L('Save', '保存')),
       err && h('div', { className: 'err' }, err),
       h(
         'div',
         { className: 'group', style: { marginTop: 12 } },
-        h('button', { className: 'option', onClick: test, disabled: busy }, h('span', { className: 'grow' }, '测试连接，拉取模型列表')),
-        entry && h('button', { className: 'option', onClick: remove, disabled: busy }, h('span', { className: 'grow danger' }, '删除')),
-        h('button', { className: 'option', onClick: onDone }, h('span', { className: 'grow' }, '取消')),
+        h('button', { className: 'option', onClick: test, disabled: busy }, h('span', { className: 'grow' }, L('Test the connection and fetch models', '测试连接，拉取模型列表'))),
+        entry && h('button', { className: 'option', onClick: remove, disabled: busy }, h('span', { className: 'grow danger' }, L('Delete', '删除'))),
+        h('button', { className: 'option', onClick: onDone }, h('span', { className: 'grow' }, L('Cancel', '取消'))),
       ),
     )
   }
@@ -99,11 +100,11 @@ export function activate(app) {
             h(
               'button',
               { key: e.id, className: 'option tall', onClick: () => setEditing(e) },
-              h('span', { className: 'grow' }, e.name, h('span', { className: 'desc' }, `${e.baseUrl.replace(/^https?:\/\//, '')} · ${e.models.length} 个模型`)),
+              h('span', { className: 'grow' }, e.name, h('span', { className: 'desc' }, `${e.baseUrl.replace(/^https?:\/\//, '')} · ${L(`${e.models.length} ${e.models.length === 1 ? 'model' : 'models'}`, `${e.models.length} 个模型`)}`)),
             ),
           ),
         ),
-      h('button', { className: 'row-btn', style: { marginTop: list.length ? 12 : 0 }, onClick: () => setEditing('new') }, h('span', { className: 'grow' }, '添加提供商')),
+      h('button', { className: 'row-btn', style: { marginTop: list.length ? 12 : 0 }, onClick: () => setEditing('new') }, h('span', { className: 'grow' }, L('Add a provider', '添加提供商'))),
     )
   }
 

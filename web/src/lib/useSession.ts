@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Item, Patch, SessionState } from '../../../shared/types.ts'
 import { api } from './api.ts'
+import { t } from '../i18n.ts'
 
 export interface SessionData {
   state: SessionState | null
@@ -54,7 +55,7 @@ export function useSession(id: string | null): SessionData {
         if (es.readyState === EventSource.CLOSED && gen === genRef.current) setTimeout(() => void connect(), 1500)
       }
     } catch (err: any) {
-      if (gen === genRef.current) setError(err?.message ?? '加载失败')
+      if (gen === genRef.current) setError(err?.message ?? t('common.loadFailed'))
     }
   }, [id])
 

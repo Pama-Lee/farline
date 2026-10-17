@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Check, ChevronRight, Compass, Download, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, ChevronRight, Compass, Download, Languages, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { MarketPlugin, PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
@@ -7,19 +7,18 @@ import { CATALOG_CHANGED, api } from '../lib/api.ts'
 import { currentPushSubscription, disablePush, enablePush, isStandalone, pushSupported } from '../lib/device.ts'
 import { PluginBoundary, syncPlugins, usePlugins } from '../plugins/runtime.tsx'
 import { setStepsView, useStepsView, type StepsView } from '../lib/prefs.ts'
+import { LOCALES } from '../../../shared/i18n/index.ts'
+import { labelMap, langPref, setLangPref, t, type MessageKey } from '../i18n.ts'
 
-type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'market' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'market' } | { name: 'skins' } | { name: 'steps' } | { name: 'language' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
 
-const STEPS_VIEWS: { id: StepsView; label: string }[] = [
-  { id: 'auto', label: '自动' },
-  { id: 'sheet', label: '弹窗' },
-  { id: 'inline', label: '在对话里展开' },
+const STEPS_VIEWS: { id: StepsView; label: MessageKey }[] = [
+  { id: 'auto', label: 'common.auto' },
+  { id: 'sheet', label: 'settings.toolCalls.sheet' },
+  { id: 'inline', label: 'settings.toolCalls.inline' },
 ]
 
-const SOURCE: Record<PluginInfo['source'], string> = { builtin: '内置', local: '本地', npm: 'npm', github: 'GitHub' }
-
-// A space between Chinese and a Latin word: 移除 API key.
-const join = (zh: string, label: string) => (/^[A-Za-z0-9]/.test(label) ? `${zh} ${label}` : `${zh}${label}`)
+const SOURCE = labelMap<PluginInfo['source']>('plugins.source.')
 
 export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLogout: () => void }) {
   const [push, setPush] = useState<boolean | null>(null)
@@ -56,7 +55,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
   const togglePush = async () => {
     if (busy) return
     if (!pushSupported()) {
-      toast(isStandalone() ? '这台设备不支持通知' : '先添加到主屏幕，再从主屏幕打开')
+      toast(t(isStandalone() ? 'settings.noPush' : 'settings.addToHome'))
       return
     }
     setBusy(true)
@@ -68,10 +67,10 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
         const ok = await enablePush()
         setPush(ok)
         if (ok) await api.pushTest()
-        else toast('通知权限未开启')
+        else toast(t('settings.pushDenied'))
       }
     } catch (e: any) {
-      toast(e?.message ?? '操作失败')
+      toast(e?.message ?? t('common.failed'))
     } finally {
       setBusy(false)
     }
@@ -84,7 +83,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       changed(await api.setPluginEnabled(p.id, !p.enabled))
     } catch (e: any) {
       setPlugins((list) => list?.map((x) => (x.id === p.id ? { ...x, enabled: p.enabled } : x)) ?? null)
-      toast(e?.message ?? '操作失败')
+      toast(e?.message ?? t('common.failed'))
     }
   }
 
@@ -123,7 +122,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       setPlugins(list)
       window.dispatchEvent(new Event(CATALOG_CHANGED))
     } catch (e: any) {
-      toast(e?.message ?? '操作失败')
+      toast(e?.message ?? t('common.failed'))
     } finally {
       setSwitching(undefined)
     }
@@ -131,9 +130,9 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
 
   if (view.name === 'skins')
     return (
-      <Sheet title="外观" onClose={onClose} onBack={() => setView({ name: 'main' })}>
+      <Sheet title={t('settings.appearance')} onClose={onClose} onBack={() => setView({ name: 'main' })}>
         <div className="group">
-          {[{ id: null, name: '默认' }, ...skins].map((k) => {
+          {[{ id: null, name: t('common.default') }, ...skins].map((k) => {
             const target = switching !== undefined ? switching : (activeSkin?.id ?? null)
             return (
               <button className="option" key={k.id ?? 'default'} disabled={switching !== undefined && switching !== k.id} onClick={() => void pickSkin(k.id)}>
@@ -146,13 +145,36 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       </Sheet>
     )
 
+  if (view.name === 'language')
+    return (
+      <Sheet title={t('settings.language')} onClose={onClose} onBack={() => setView({ name: 'main' })}>
+        <div className="group">
+          {[{ id: 'auto' as const, label: t('common.auto') }, ...LOCALES].map((o) => (
+            <button
+              className="option"
+              key={o.id}
+              onClick={() => {
+                setLangPref(o.id)
+                // Plugin names and model labels come from the server in the new language.
+                api.plugins().then(setPlugins, () => undefined)
+                window.dispatchEvent(new Event(CATALOG_CHANGED))
+              }}
+            >
+              <span className="grow">{o.label}</span>
+              {langPref() === o.id && <Check size={20} strokeWidth={2.2} className="check" />}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    )
+
   if (view.name === 'steps')
     return (
-      <Sheet title="工具调用" onClose={onClose} onBack={() => setView({ name: 'main' })}>
+      <Sheet title={t('settings.toolCalls')} onClose={onClose} onBack={() => setView({ name: 'main' })}>
         <div className="group">
           {STEPS_VIEWS.map((o) => (
             <button className="option" key={o.id} onClick={() => setStepsView(o.id)}>
-              <span className="grow">{o.label}</span>
+              <span className="grow">{t(o.label)}</span>
               {stepsView === o.id && <Check size={20} strokeWidth={2.2} className="check" />}
             </button>
           ))}
@@ -162,7 +184,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
 
   if (view.name === 'market')
     return (
-      <Sheet title="发现插件" onClose={onClose} onBack={() => setView({ name: 'plugins' })} size="tall">
+      <Sheet title={t('plugins.discover')} onClose={onClose} onBack={() => setView({ name: 'plugins' })} size="tall">
         <Market
           onInstalled={(info) => {
             setPlugins((list) => [...(list ?? []).filter((x) => x.id !== info.id), info])
@@ -176,7 +198,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
 
   if (view.name === 'install')
     return (
-      <Sheet title="从 GitHub 安装" onClose={onClose} onBack={() => setView({ name: 'plugins' })}>
+      <Sheet title={t('plugins.installFromGitHub')} onClose={onClose} onBack={() => setView({ name: 'plugins' })}>
         <InstallForm
           onInstalled={(info) => {
             setPlugins((list) => [...(list ?? []).filter((x) => x.id !== info.id), info])
@@ -190,13 +212,13 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
 
   if (view.name === 'plugins')
     return (
-      <Sheet title="插件" onClose={onClose} onBack={() => setView({ name: 'main' })}>
+      <Sheet title={t('settings.plugins')} onClose={onClose} onBack={() => setView({ name: 'main' })}>
         {!plugins ? (
           <div className="empty">
             <Spinner />
           </div>
         ) : plugins.length === 0 ? (
-          <div className="empty">没有插件</div>
+          <div className="empty">{t('plugins.none')}</div>
         ) : (
           <div className="group">
             {plugins.map((p) => (
@@ -204,22 +226,22 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
                 <button className="grow plain" onClick={() => setView({ name: 'plugin', id: p.id, back: 'plugins' })}>
                   {p.name}
                   <span className={`desc${p.state === 'error' ? ' danger' : ''}`}>
-                    {p.state === 'error' ? '出错' : `${p.version} · ${SOURCE[p.source]}`}
+                    {p.state === 'error' ? t('plugins.error') : `${p.version} · ${SOURCE[p.source]}`}
                   </span>
                 </button>
-                <button className={`switch${p.enabled ? ' on' : ''}`} onClick={() => void toggle(p)} aria-label={p.enabled ? '停用' : '启用'} />
+                <button className={`switch${p.enabled ? ' on' : ''}`} onClick={() => void toggle(p)} aria-label={t(p.enabled ? 'common.disable' : 'common.enable')} />
               </div>
             ))}
           </div>
         )}
         <button className="row-btn" style={{ marginTop: 12 }} onClick={() => setView({ name: 'market' })}>
           <Compass size={19} strokeWidth={1.6} />
-          <span className="grow">发现插件</span>
+          <span className="grow">{t('plugins.discover')}</span>
           <ChevronRight size={18} color="var(--text-3)" />
         </button>
         <button className="row-btn" onClick={() => setView({ name: 'install' })}>
           <Download size={19} strokeWidth={1.6} />
-          <span className="grow">从 GitHub 安装</span>
+          <span className="grow">{t('plugins.installFromGitHub')}</span>
           <ChevronRight size={18} color="var(--text-3)" />
         </button>
       </Sheet>
@@ -231,10 +253,10 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
   )
 
   return (
-    <Sheet title="设置" onClose={onClose}>
+    <Sheet title={t('settings.title')} onClose={onClose}>
       <button className="row-btn" onClick={togglePush}>
         <Bell size={19} strokeWidth={1.6} />
-        <span className="grow">通知</span>
+        <span className="grow">{t('settings.notifications')}</span>
         <span className={`switch${push ? ' on' : ''}`} />
       </button>
       {configurable.length > 0 && (
@@ -254,18 +276,23 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       {skins.length > 0 && (
         <button className="row-btn" onClick={() => setView({ name: 'skins' })}>
           <Palette size={19} strokeWidth={1.6} />
-          <span className="grow">外观</span>
-          <span className="value">{activeSkin?.name ?? '默认'}</span>
+          <span className="grow">{t('settings.appearance')}</span>
+          <span className="value">{activeSkin?.name ?? t('common.default')}</span>
         </button>
       )}
+      <button className="row-btn" onClick={() => setView({ name: 'language' })}>
+        <Languages size={19} strokeWidth={1.6} />
+        <span className="grow">{t('settings.language')}</span>
+        <span className="value">{langPref() === 'auto' ? t('common.auto') : LOCALES.find((l) => l.id === langPref())?.label}</span>
+      </button>
       <button className="row-btn" onClick={() => setView({ name: 'steps' })}>
         <ListTree size={19} strokeWidth={1.6} />
-        <span className="grow">工具调用</span>
-        <span className="value">{STEPS_VIEWS.find((o) => o.id === stepsView)!.label}</span>
+        <span className="grow">{t('settings.toolCalls')}</span>
+        <span className="value">{t(STEPS_VIEWS.find((o) => o.id === stepsView)!.label)}</span>
       </button>
       <button className="row-btn" onClick={() => setView({ name: 'plugins' })}>
         <Puzzle size={19} strokeWidth={1.6} />
-        <span className="grow">插件</span>
+        <span className="grow">{t('settings.plugins')}</span>
         <span className="value">{plugins ? plugins.filter((p) => p.state === 'active').length : ''}</span>
       </button>
       <button
@@ -276,7 +303,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
         }}
       >
         <LogOut size={19} strokeWidth={1.6} />
-        <span className="grow">退出登录</span>
+        <span className="grow">{t('settings.signOut')}</span>
       </button>
     </Sheet>
   )
@@ -289,20 +316,20 @@ function Market({ onInstalled, onOpen }: { onInstalled: (p: PluginInfo) => void;
   const load = (refresh = false) =>
     api.market(refresh).then(
       (l) => (setList(l), setErr('')),
-      (e) => setErr(e?.message ?? '加载失败'),
+      (e) => setErr(e?.message ?? t('common.loadFailed')),
     )
   useEffect(() => void load(), [])
 
   const install = async (m: MarketPlugin) => {
-    if (busy || !confirm(`安装「${m.name}」？插件代码会在这台服务器上运行。`)) return
+    if (busy || !confirm(t('plugins.confirmInstallNamed', { name: m.name }))) return
     setBusy(m.repo)
     try {
       const info = await api.installPlugin(m.repo)
-      toast(`已安装 ${info.name}`)
+      toast(t('plugins.installed', { name: info.name }))
       onInstalled(info)
       await load()
     } catch (e: any) {
-      toast(e?.message ?? '安装失败')
+      toast(e?.message ?? t('plugins.installFailed'))
     } finally {
       setBusy(null)
     }
@@ -315,30 +342,30 @@ function Market({ onInstalled, onOpen }: { onInstalled: (p: PluginInfo) => void;
         <Spinner />
       </div>
     )
-  if (!list.length) return <div className="empty">还没有插件</div>
+  if (!list.length) return <div className="empty">{t('plugins.marketEmpty')}</div>
   return (
     <div className="group">
       {list.map((m) => {
-        const meta = [m.author, m.version && `v${m.version}`, m.stars ? `★ ${m.stars}` : '', m.skin ? '皮肤' : ''].filter(Boolean).join(' · ')
+        const meta = [m.author, m.version && `v${m.version}`, m.stars ? `★ ${m.stars}` : '', m.skin ? t('plugins.skin') : ''].filter(Boolean).join(' · ')
         return (
           <div className="option market-item" key={m.repo}>
             <a className="grow plain" href={m.url} target="_blank" rel="noreferrer">
               <span className="mk-name">{m.name}</span>
               {m.description && <span className="desc mk-desc">{m.description}</span>}
               <span className="desc">{meta}</span>
-              {!m.compatible && <span className="desc danger">{m.engines ? `需要 Farline ${m.engines}` : `需要插件 API v${m.apiVersion}`}</span>}
+              {!m.compatible && <span className="desc danger">{m.engines ? t('plugins.needsFarline', { range: m.engines }) : t('plugins.needsApi', { v: m.apiVersion })}</span>}
             </a>
             {m.installed?.fromHere || (m.installed && !m.compatible) ? (
               <button className="mk-btn ghost" onClick={() => onOpen(m.id)}>
-                已安装
+                {t('common.installed')}
               </button>
             ) : m.installed ? (
-              <button className="mk-btn ghost" disabled title="已有同 id 的插件">
-                已安装
+              <button className="mk-btn ghost" disabled title={t('plugins.sameId')}>
+                {t('common.installed')}
               </button>
             ) : (
               <button className="mk-btn" disabled={!m.compatible || !!busy} onClick={() => void install(m)}>
-                {busy === m.repo ? <Spinner size={15} /> : '安装'}
+                {busy === m.repo ? <Spinner size={15} /> : t('common.install')}
               </button>
             )}
           </div>
@@ -354,15 +381,15 @@ function InstallForm({ onInstalled }: { onInstalled: (p: PluginInfo) => void }) 
   const [err, setErr] = useState('')
   const install = async () => {
     if (busy || !source.trim()) return
-    if (!confirm('插件代码会在这台服务器上运行，确认安装？')) return
+    if (!confirm(t('plugins.confirmInstall'))) return
     setBusy(true)
     setErr('')
     try {
       const info = await api.installPlugin(source.trim())
-      toast(`已安装 ${info.name}`)
+      toast(t('plugins.installed', { name: info.name }))
       onInstalled(info)
     } catch (e: any) {
-      setErr(e?.message ?? '安装失败')
+      setErr(e?.message ?? t('plugins.installFailed'))
     } finally {
       setBusy(false)
     }
@@ -381,7 +408,7 @@ function InstallForm({ onInstalled }: { onInstalled: (p: PluginInfo) => void }) 
         autoFocus
       />
       <button className="black-pill wide" disabled={busy || !source.trim()} onClick={() => void install()}>
-        {busy ? <Spinner size={18} /> : '安装'}
+        {busy ? <Spinner size={18} /> : t('common.install')}
       </button>
       {err && <div className="err">{err}</div>}
     </div>
@@ -397,22 +424,22 @@ function RemoteRows({ info, onChange, onRemoved }: { info: PluginInfo; onChange:
     try {
       const res = await api.updatePlugin(info.id)
       onChange(res.plugin)
-      toast(res.updated ? `已更新到 ${res.plugin.version}` : '已是最新')
+      toast(res.updated ? t('plugins.updatedTo', { version: res.plugin.version }) : t('plugins.upToDate'))
     } catch (e: any) {
-      toast(e?.message ?? '更新失败')
+      toast(e?.message ?? t('plugins.updateFailed'))
     } finally {
       setBusy(null)
     }
   }
   const remove = async () => {
-    if (busy || !confirm(`确认卸载「${info.name}」？`)) return
+    if (busy || !confirm(t('plugins.confirmUninstall', { name: info.name }))) return
     setBusy('remove')
     try {
       await api.uninstallPlugin(info.id)
-      toast('已卸载')
+      toast(t('plugins.uninstalled'))
       onRemoved()
     } catch (e: any) {
-      toast(e?.message ?? '卸载失败')
+      toast(e?.message ?? t('plugins.uninstallFailed'))
       setBusy(null)
     }
   }
@@ -428,11 +455,11 @@ function RemoteRows({ info, onChange, onRemoved }: { info: PluginInfo; onChange:
         <ArrowUpRight size={18} color="var(--text-2)" />
       </a>
       <button className="option" onClick={() => void update()} disabled={!!busy}>
-        <span className="grow">检查更新</span>
+        <span className="grow">{t('plugins.checkUpdates')}</span>
         {busy === 'update' && <Spinner size={18} />}
       </button>
       <button className="option" onClick={() => void remove()} disabled={!!busy}>
-        <span className="grow danger">卸载</span>
+        <span className="grow danger">{t('plugins.uninstall')}</span>
         {busy === 'remove' && <Spinner size={18} />}
       </button>
     </div>
@@ -447,11 +474,11 @@ function PluginDetail({ info, status, onToggle, onChange, onRemoved }: { info: P
   const savedSecrets = info.settings.filter((f) => f.type === 'secret' && f.source === 'saved')
 
   const remove = async (f: SettingFieldView) => {
-    if (!confirm(`${join('确认移除', f.label)}？`)) return
+    if (!confirm(t('plugins.confirmRemoveSetting', { label: f.label }))) return
     try {
       onChange(await api.savePluginSettings(info.id, { [f.key]: null }))
     } catch (e: any) {
-      toast(e?.message ?? '移除失败')
+      toast(e?.message ?? t('plugins.removeFailed'))
     }
   }
 
@@ -460,9 +487,9 @@ function PluginDetail({ info, status, onToggle, onChange, onRemoved }: { info: P
     setTesting(true)
     try {
       await api.testPluginNotification(info.id)
-      toast('已发送')
+      toast(t('common.sent'))
     } catch (e: any) {
-      toast(e?.message ?? '发送失败')
+      toast(e?.message ?? t('common.sendFailed'))
     } finally {
       setTesting(false)
     }
@@ -474,7 +501,7 @@ function PluginDetail({ info, status, onToggle, onChange, onRemoved }: { info: P
   return (
     <>
       <button className="row-btn" onClick={onToggle}>
-        <span className="grow">启用</span>
+        <span className="grow">{t('plugins.enabled')}</span>
         <span className={`switch${info.enabled ? ' on' : ''}`} />
       </button>
       {error && <div className="notice error plugin-error">{error}</div>}
@@ -502,13 +529,13 @@ function PluginDetail({ info, status, onToggle, onChange, onRemoved }: { info: P
           ))}
           {active && info.notifies && (
             <button className="option" onClick={test}>
-              <span className="grow">发送测试通知</span>
+              <span className="grow">{t('plugins.sendTest')}</span>
               {testing && <Spinner size={18} />}
             </button>
           )}
           {savedSecrets.map((f) => (
             <button className="option" key={f.key} onClick={() => void remove(f)}>
-              <span className="grow danger">{join('移除', f.label)}</span>
+              <span className="grow danger">{t('plugins.removeSetting', { label: f.label })}</span>
             </button>
           ))}
         </div>
@@ -564,9 +591,9 @@ function SettingsForm({ info, onSaved }: { info: PluginInfo; onSaved: (p: Plugin
       const next = await api.savePluginSettings(info.id, changes)
       setValues(Object.fromEntries(next.settings.map((f) => [f.key, initial(f)])))
       onSaved(next)
-      toast('已保存')
+      toast(t('common.saved'))
     } catch (e: any) {
-      setErr(e?.message ?? '保存失败')
+      setErr(e?.message ?? t('common.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -617,7 +644,7 @@ function SettingsForm({ info, onSaved }: { info: PluginInfo; onSaved: (p: Plugin
         )
       })}
       <button className="black-pill wide" disabled={!dirty || busy}>
-        {busy ? <Spinner size={20} /> : '保存'}
+        {busy ? <Spinner size={20} /> : t('common.save')}
       </button>
       {err && <div className="err">{err}</div>}
     </form>

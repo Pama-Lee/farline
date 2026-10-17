@@ -1,12 +1,14 @@
+import { locale, t } from '../i18n.ts'
+
 export function relTime(ms: number): string {
   const d = Date.now() - ms
-  if (d < 60_000) return '刚刚'
-  if (d < 3600_000) return `${Math.floor(d / 60_000)} 分钟前`
-  if (d < 86400_000) return `${Math.floor(d / 3600_000)} 小时前`
+  if (d < 60_000) return t('time.justNow')
+  const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' })
+  if (d < 3600_000) return rtf.format(-Math.floor(d / 60_000), 'minute')
+  if (d < 86400_000) return rtf.format(-Math.floor(d / 3600_000), 'hour')
   const days = Math.floor(d / 86400_000)
-  if (days < 7) return `${days} 天前`
-  const dt = new Date(ms)
-  return `${dt.getMonth() + 1}月${dt.getDate()}日`
+  if (days < 7) return rtf.format(-days, 'day')
+  return new Intl.DateTimeFormat(locale(), { month: 'short', day: 'numeric' }).format(ms)
 }
 
 export function basename(p: string): string {

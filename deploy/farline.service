@@ -1,0 +1,23 @@
+# systemd unit: run Farline as the same user that owns your Claude Code login.
+# Copy to /etc/systemd/system/farline.service, adjust User/paths, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now farline
+[Unit]
+Description=Farline
+After=network-online.target
+
+[Service]
+User=youruser
+WorkingDirectory=/home/youruser/farline/server
+ExecStart=/usr/bin/node src/main.ts
+Environment=FARLINE_HOST=127.0.0.1
+Environment=FARLINE_PORT=3077
+Environment=FARLINE_DEFAULT_CWD=/home/youruser
+Environment=FARLINE_VAPID_SUBJECT=mailto:you@example.com
+# Optional: enables the DeepSeek provider.
+# Environment=DEEPSEEK_API_KEY=sk-...
+Restart=on-failure
+# Stopping the service ends running sessions; they resume on the next message.
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target

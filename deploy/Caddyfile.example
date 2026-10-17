@@ -1,0 +1,7 @@
+# Farline must be served over HTTPS (secure cookies, service worker, web push).
+farline.example.com {
+	reverse_proxy 127.0.0.1:3077 {
+		# Session events are server-sent events; never buffer them.
+		flush_interval -1
+	}
+}

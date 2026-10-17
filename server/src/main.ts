@@ -7,6 +7,7 @@ import { streamSSE } from 'hono/streaming'
 import { sessionActivity } from './activity.ts'
 import { isAuthed, login, logout, requireAuth, setPassword } from './auth.ts'
 import { config, underFsRoot } from './config.ts'
+import { clearKey, deepseekKey, saveKey, status as deepseekStatus } from './deepseek.ts'
 import { DEEPSEEK_MODELS, allViews, cachedView, createView, models, openView, warmModels } from './live.ts'
 import { subscribe, unsubscribe, vapidPublicKey, notify } from './push.ts'
 import { save, state } from './store.ts'
@@ -42,6 +43,26 @@ api.get('/device', (c) => {
 })
 
 api.get('/models', (c) => c.json(models()))
+
+api.get('/deepseek', async (c) => c.json(await deepseekStatus()))
+
+api.put('/deepseek', async (c) => {
+  const { key } = await c.req.json<{ key?: unknown }>().catch(() => ({ key: undefined }))
+  if (typeof key !== 'string') return c.json({ error: 'bad key' }, 400)
+  try {
+    await saveKey(key)
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '保存失败' }, 400)
+  }
+  for (const v of allViews()) v.deepseekKeyChanged()
+  return c.json(await deepseekStatus())
+})
+
+api.delete('/deepseek', async (c) => {
+  clearKey()
+  for (const v of allViews()) v.deepseekKeyChanged()
+  return c.json(await deepseekStatus())
+})
 
 // Ordered by the last real message, not file mtime: the Claude app bridge
 // keeps appending status lines to idle sessions, which would float weeks-old
@@ -89,7 +110,7 @@ api.post('/sessions', async (c) => {
   const body = await c.req.json<CreateBody>()
   const dirs = listDirs(body.cwd)
   if (!dirs) return c.json({ error: '目录不可用' }, 400)
-  const provider: Provider = body.provider === 'deepseek' && config.deepseekKey ? 'deepseek' : 'claude'
+  const provider: Provider = body.provider === 'deepseek' && deepseekKey() ? 'deepseek' : 'claude'
   // DeepSeek sessions run with every permission open unless told otherwise.
   const permissionMode = MODES.includes(body.permissionMode) ? body.permissionMode : provider === 'deepseek' ? 'bypassPermissions' : 'auto'
   const model = models().some((m) => m.provider === provider && m.value === body.model) ? body.model : provider === 'deepseek' ? 'deepseek-v4-pro' : 'opus'
@@ -162,7 +183,7 @@ api.patch('/sessions/:id', async (c) => {
   if (!view) return c.json({ error: 'not found' }, 404)
   if (body.permissionMode && !MODES.includes(body.permissionMode)) return c.json({ error: 'bad mode' }, 400)
   if (body.effort && !EFFORTS.includes(body.effort)) return c.json({ error: 'bad effort' }, 400)
-  if (body.provider && !(body.provider === 'claude' || (body.provider === 'deepseek' && config.deepseekKey))) return c.json({ error: 'bad provider' }, 400)
+  if (body.provider && !(body.provider === 'claude' || (body.provider === 'deepseek' && deepseekKey()))) return c.json({ error: 'bad provider' }, 400)
   const provider = body.provider ?? view.meta.provider
   if (body.model && !models().some((m) => m.provider === provider && m.value === body.model)) return c.json({ error: 'bad model' }, 400)
   if (body.classifierModel && !DEEPSEEK_MODELS.some((m) => m.value === body.classifierModel)) return c.json({ error: 'bad classifier' }, 400)

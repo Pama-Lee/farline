@@ -1,5 +1,6 @@
 import type {
   CreateBody,
+  DeepSeekStatus,
   EffortLevel,
   DirListing,
   McpServer,
@@ -12,6 +13,8 @@ import type {
   SessionSummary,
   Upload,
 } from '../../../shared/types.ts'
+
+export const MODELS_CHANGED = 'farline:models'
 
 export class ApiError extends Error {
   status: number
@@ -52,6 +55,9 @@ export const api = {
   logout: () => req<{ ok: true }>('POST', '/logout'),
   device: () => req<DeviceInfo>('GET', '/device'),
   models: () => req<ModelOption[]>('GET', '/models'),
+  deepseek: () => req<DeepSeekStatus>('GET', '/deepseek'),
+  setDeepseekKey: (key: string) => req<DeepSeekStatus>('PUT', '/deepseek', { key }),
+  clearDeepseekKey: () => req<DeepSeekStatus>('DELETE', '/deepseek'),
   sessions: (offset = 0, limit = 40) => req<{ sessions: SessionSummary[]; nextOffset: number | null }>('GET', `/sessions?offset=${offset}&limit=${limit}`),
   session: (id: string, all = false) => req<SessionSnapshot>('GET', `/sessions/${id}${all ? '?all=1' : ''}`),
   create: (body: CreateBody) => req<{ id: string }>('POST', '/sessions', body),

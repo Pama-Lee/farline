@@ -139,3 +139,11 @@ export interface CreateBody extends SendBody {
   effort?: EffortLevel
   classifierModel?: string
 }
+
+export interface DeepSeekStatus {
+  // Where the API key comes from: the settings page or DEEPSEEK_API_KEY.
+  source: 'saved' | 'env' | null
+  hint?: string
+  invalid?: boolean
+  balance?: { available: boolean; balances: { currency: string; total: string }[] }
+}

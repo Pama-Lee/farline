@@ -10,7 +10,7 @@
 - 任意目录起会话，目录选择器可以浏览整台服务器
 - 工具调用、思考过程、图片、提问（AskUserQuestion）、权限确认
 - 切模型、思考强度、权限模式，中途可改
-- 模型可选 Anthropic 或 DeepSeek（V4 Pro / Flash，100 万上下文，自动模式的判断也由 DeepSeek 完成）
+- 模型可选 Anthropic 或 DeepSeek（V4 Pro / Flash，100 万上下文，自动模式的判断也由 DeepSeek 完成）。DeepSeek 的 API key 在设置页填，能看余额
 - 手机装成 PWA；电脑上是侧栏 + 对话的布局，回车发送
 - 单密码登录
 
@@ -44,7 +44,7 @@ Farline 能以运行它的用户身份读写文件、执行命令，等同于把
 | `FARLINE_VAPID_SUBJECT` | `mailto:admin@example.com` | 推送发送方联系方式，换成你自己的 |
 | `FARLINE_MAX_LIVE` | `6` | 同时保持的会话进程数 |
 | `FARLINE_IDLE_CLOSE_MS` | `1800000` | 会话空闲多久关掉进程（再发消息会自动恢复） |
-| `DEEPSEEK_API_KEY` | | 设了才出现 DeepSeek |
+| `DEEPSEEK_API_KEY` | | DeepSeek API key；设置页填过的优先 |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | |
 
 重启服务会中断正在跑的会话，下次发消息时从记录恢复。
@@ -65,7 +65,7 @@ A self-hosted workspace for coding agents. Install it on your own server, use it
 - Start a session in any directory on the server
 - Tool calls, thinking, images, AskUserQuestion, permission prompts
 - Switch model, effort and permission mode mid-session
-- Models from Anthropic or DeepSeek (V4 Pro / Flash, 1M context, DeepSeek also judges auto mode)
+- Models from Anthropic or DeepSeek (V4 Pro / Flash, 1M context, DeepSeek also judges auto mode); the DeepSeek API key is set on the settings page, which also shows the balance
 - Installable PWA on phones; sidebar layout on desktop
 
 Requires Node 22.18+. The agent runtime is the Claude Code CLI, installed for the same user. Build with the commands above, set a password (12+ characters), and serve it behind HTTPS (see `deploy/`). Configuration is the environment variables in the table above.

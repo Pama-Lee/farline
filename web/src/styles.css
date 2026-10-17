@@ -1585,6 +1585,46 @@ textarea {
   outline: 0;
 }
 
+/* ---------- settings: DeepSeek ---------- */
+
+a.option {
+  color: inherit;
+  text-decoration: none;
+}
+
+.option .hint.mono {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.option .danger {
+  color: var(--red);
+}
+
+.group + .key-form,
+.key-form + .group {
+  margin-top: 16px;
+}
+
+.key-form .path-input {
+  margin-bottom: 10px;
+}
+
+.black-pill.wide {
+  width: 100%;
+  height: 46px;
+  border-radius: 23px;
+  justify-content: center;
+  box-shadow: none;
+}
+
+.key-form .err {
+  margin: 10px 4px 0;
+  font-size: 13.5px;
+  color: var(--red);
+}
+
 /* ---------- desktop: sidebar + thread ---------- */
 
 .desktop {

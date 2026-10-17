@@ -16,6 +16,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import { runningElsewhere } from './activity.ts'
 import { config } from './config.ts'
+import { deepseekKey } from './deepseek.ts'
 import { notify } from './push.ts'
 import { save, state, type SessionMeta } from './store.ts'
 import { ItemLog } from './transcript.ts'
@@ -42,7 +43,7 @@ const MAIN: Record<string, { label: string; desc: string; resolved: string }> = 
 let claudeModels: ModelOption[] = Object.entries(MAIN).map(([value, m]) => ({ provider: 'claude', value, ...m, efforts: EFFORTS }))
 
 export function models(): ModelOption[] {
-  return [...claudeModels, ...(config.deepseekKey ? DEEPSEEK_MODELS : [])]
+  return [...claudeModels, ...(deepseekKey() ? DEEPSEEK_MODELS : [])]
 }
 
 class Channel<T> implements AsyncIterable<T> {
@@ -177,7 +178,7 @@ export class SessionView {
     if (this.meta.provider === 'deepseek') {
       Object.assign(env, {
         ANTHROPIC_BASE_URL: `${config.deepseekBase}/anthropic`,
-        ANTHROPIC_AUTH_TOKEN: config.deepseekKey,
+        ANTHROPIC_AUTH_TOKEN: deepseekKey(),
         ANTHROPIC_MODEL: this.meta.model,
         ANTHROPIC_DEFAULT_OPUS_MODEL: this.meta.model,
         // Claude Code's auto-mode classifier runs on the sonnet slot (checked
@@ -343,6 +344,11 @@ export class SessionView {
   // Provider and classifier live in the process environment, so changing them
   // means a fresh Claude Code process that resumes this session.
   private respawn = false
+
+  // The key is baked into the running process; pick up a new one.
+  deepseekKeyChanged() {
+    if (this.meta.provider === 'deepseek') this.respawnWhenIdle()
+  }
 
   private respawnWhenIdle() {
     if (!this.q) return

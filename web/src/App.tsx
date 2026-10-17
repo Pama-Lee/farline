@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ModelOption } from '../../shared/types.ts'
 import { Spinner, ToastHost } from './components/bits.tsx'
-import { api, setUnauthorizedHandler, type DeviceInfo } from './lib/api.ts'
+import { MODELS_CHANGED, api, setUnauthorizedHandler, type DeviceInfo } from './lib/api.ts'
 import { useRoute } from './lib/router.ts'
 import { useDesktop } from './lib/useDesktop.ts'
 import { closeViewer, useViewer } from './lib/viewer.ts'
@@ -40,6 +40,13 @@ export function App() {
     setUnauthorizedHandler(() => setAuthed(false))
     void boot()
   }, [boot])
+
+  // Settings can add or remove a provider.
+  useEffect(() => {
+    const refresh = () => api.models().then(setModels, () => undefined)
+    window.addEventListener(MODELS_CHANGED, refresh)
+    return () => window.removeEventListener(MODELS_CHANGED, refresh)
+  }, [])
 
   // Refresh prefs (last directory, model) whenever we come back home.
   useEffect(() => {

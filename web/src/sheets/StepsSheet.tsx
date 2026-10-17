@@ -4,6 +4,7 @@ import { highlight } from '../components/Markdown.tsx'
 import { Sheet } from '../components/Sheet.tsx'
 import { Spinner, toast } from '../components/bits.tsx'
 import { api } from '../lib/api.ts'
+import { openFile } from '../lib/files.ts'
 import { openViewer } from '../lib/viewer.ts'
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { category, stepLabel, stepsSummary, type StepItem } from '../lib/steps.ts'
@@ -62,6 +63,23 @@ export function Field({ label, children, plain }: { label: string; children: Rea
       <div className="field-label">{label}</div>
       <div className={`field-box${plain ? ' plain' : ''}`}>{children}</div>
     </>
+  )
+}
+
+// A path in a step's details opens in the file panel.
+function FilePath({ path, line, sessionId, onClose }: { path: unknown; line?: unknown; sessionId: string | null; onClose: () => void }) {
+  const p = s(path)
+  if (!p.startsWith('/')) return <>{p}</>
+  return (
+    <button
+      className="field-file"
+      onClick={() => {
+        onClose()
+        openFile({ path: p, line: typeof line === 'number' ? line : undefined }, sessionId)
+      }}
+    >
+      {p}
+    </button>
   )
 }
 
@@ -164,7 +182,10 @@ function StepDetail({ step, sessionId, live, onOpenTask, onClose, onBack }: Omit
     case 'Read':
       body = (
         <>
-          <Field label="文件">{s(i.file_path)}{i.offset ? `  (${s(i.offset)}–)` : ''}</Field>
+          <Field label="文件">
+            <FilePath path={i.file_path} line={i.offset} sessionId={sessionId} onClose={onClose} />
+            {i.offset ? `  (${s(i.offset)}–)` : ''}
+          </Field>
           {output}
         </>
       )
@@ -172,7 +193,9 @@ function StepDetail({ step, sessionId, live, onOpenTask, onClose, onBack }: Omit
     case 'Edit':
       body = (
         <>
-          <Field label="文件">{s(i.file_path)}</Field>
+          <Field label="文件">
+            <FilePath path={i.file_path} sessionId={sessionId} onClose={onClose} />
+          </Field>
           <Field label="修改"><Diff oldText={s(i.old_string)} newText={s(i.new_string)} /></Field>
           {output}
         </>
@@ -181,7 +204,9 @@ function StepDetail({ step, sessionId, live, onOpenTask, onClose, onBack }: Omit
     case 'MultiEdit':
       body = (
         <>
-          <Field label="文件">{s(i.file_path)}</Field>
+          <Field label="文件">
+            <FilePath path={i.file_path} sessionId={sessionId} onClose={onClose} />
+          </Field>
           {Array.isArray(i.edits) &&
             i.edits.map((e: any, k: number) => (
               <Field key={k} label={`修改 ${k + 1}`}><Diff oldText={s(e.old_string)} newText={s(e.new_string)} /></Field>
@@ -193,7 +218,9 @@ function StepDetail({ step, sessionId, live, onOpenTask, onClose, onBack }: Omit
     case 'Write':
       body = (
         <>
-          <Field label="文件">{s(i.file_path)}</Field>
+          <Field label="文件">
+            <FilePath path={i.file_path} sessionId={sessionId} onClose={onClose} />
+          </Field>
           <Field label="内容">{s(i.content)}</Field>
           {output}
         </>

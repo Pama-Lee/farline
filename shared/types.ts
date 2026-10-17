@@ -145,6 +145,30 @@ export interface TaskOutput {
   total: number
 }
 
+// A path as written in a message, found on disk.
+export interface ResolvedPath {
+  path: string
+  dir: boolean
+  line?: number
+}
+
+export interface FileEntry {
+  name: string
+  dir: boolean
+  size?: number
+}
+
+export interface FileRead {
+  path: string
+  kind: 'dir' | 'text' | 'image' | 'binary'
+  size: number
+  mtime: number
+  text?: string
+  // Only the start of a large file was read.
+  truncated?: boolean
+  entries?: FileEntry[]
+}
+
 export interface McpServer {
   name: string
   status: string

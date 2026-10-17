@@ -2278,3 +2278,254 @@ a.option {
     opacity: 0;
   }
 }
+
+/* ---------- files mentioned in messages ---------- */
+
+.md code.file-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(20, 20, 19, 0.35);
+  text-underline-offset: 3px;
+}
+
+.md a.file-link,
+.md code.file-link:hover {
+  cursor: pointer;
+}
+
+.md code.file-link:hover {
+  background: #e4e4e1;
+}
+
+.field-file {
+  font: inherit;
+  text-align: left;
+  word-break: break-all;
+  text-decoration: underline;
+  text-decoration-color: rgba(20, 20, 19, 0.35);
+  text-underline-offset: 3px;
+}
+
+.desktop {
+  --files-w: min(700px, 46vw);
+}
+
+.desktop.with-files {
+  grid-template-columns: var(--files-w) 1fr;
+}
+
+.file-panel {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  animation: panel-in-left 0.22s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.file-full {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  animation: slide-in-left 0.26s cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+@keyframes panel-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+.fp-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 56px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.file-full .fp-head {
+  height: auto;
+  padding: calc(var(--safe-top) + 6px) 8px 8px 6px;
+}
+
+.fp-title {
+  flex: 1;
+  min-width: 0;
+  padding: 0 6px;
+}
+
+.fp-title .t,
+.fp-title .s {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fp-title .t {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.fp-title .s {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.fp-btn,
+.fp-toggle {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+}
+
+.fp-btn:hover,
+.fp-toggle:hover,
+.fp-toggle.on {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text);
+}
+
+.fp-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.fp-code {
+  position: relative;
+  display: flex;
+  min-width: max-content;
+  padding: 12px 0 calc(var(--safe-bottom) + 24px);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 20px;
+  letter-spacing: 0;
+}
+
+.fp-gutter,
+.fp-src {
+  margin: 0;
+  font: inherit;
+  line-height: inherit;
+}
+
+.fp-gutter {
+  flex: none;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding: 0 12px 0 14px;
+  text-align: right;
+  color: var(--text-3);
+  background: var(--surface);
+  user-select: none;
+}
+
+.fp-src {
+  padding: 0 24px 0 4px;
+  white-space: pre;
+  tab-size: 4;
+}
+
+.fp-hl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: rgba(255, 196, 0, 0.18);
+  pointer-events: none;
+}
+
+.fp-md {
+  padding: 16px 22px calc(var(--safe-bottom) + 40px);
+}
+
+.fp-list {
+  padding: 6px 8px calc(var(--safe-bottom) + 16px);
+}
+
+.fp-entry {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: 10px;
+  text-align: left;
+  font-size: 14.5px;
+}
+
+.fp-entry:hover,
+.fp-entry:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.fp-entry svg {
+  flex: none;
+  color: var(--text-2);
+}
+
+.fp-entry .n {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fp-entry.hidden .n {
+  color: var(--text-2);
+}
+
+.fp-entry .sz {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+
+.fp-image {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.fp-image img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.fp-download {
+  display: block;
+  margin-top: 12px;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.fp-note {
+  padding: 10px 16px 24px;
+  font-size: 12.5px;
+  color: var(--text-3);
+}

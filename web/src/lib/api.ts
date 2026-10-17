@@ -3,6 +3,7 @@ import type {
   CreateBody,
   EffortLevel,
   DirListing,
+  FileRead,
   McpServer,
   PluginInfo,
   PluginStatus,
@@ -76,6 +77,7 @@ export const api = {
   taskOutput: (id: string, taskId: string) => req<TaskOutput>('GET', `/sessions/${id}/tasks/${taskId}/output`),
   stopTask: (id: string, taskId: string) => req<{ ok: true }>('POST', `/sessions/${id}/tasks/${taskId}/stop`),
   backgroundTool: (id: string, toolUseId: string) => req<{ ok: boolean }>('POST', `/sessions/${id}/background`, { toolUseId }),
+  readFile: (path: string) => req<FileRead>('GET', `/fs/read?path=${encodeURIComponent(path)}`),
   dirs: (path?: string, hidden = false) => req<DirListing>('GET', `/fs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: '1' } : {}) })}`),
   upload: (file: Blob, name: string) => {
     const fd = new FormData()

@@ -12,6 +12,7 @@ import { runningStep, stepLabel, stepsSummary, toBlocks, type StepItem } from '.
 import { useDesktop } from '../lib/useDesktop.ts'
 import { useSession } from '../lib/useSession.ts'
 import { openViewer, type ViewerImage } from '../lib/viewer.ts'
+import { FileLinkContext } from '../lib/files.ts'
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { DirPicker } from '../sheets/DeviceSheet.tsx'
 import { ContextSheet } from '../sheets/ContextSheet.tsx'
@@ -67,6 +68,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const status = state?.status ?? 'idle'
   const busy = status === 'running' || status === 'requires_action'
 
+  const fileScope = useMemo(() => (id ? { sessionId: id } : null), [id])
   const blocks = useMemo(() => toBlocks(items), [items])
   const tasks = useMemo(() => collectTasks(items, state?.tasks ?? []), [items, state?.tasks])
   const runningTasks = tasks.filter((t) => t.status === 'running').length
@@ -165,169 +167,171 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const title = state?.title || (id ? '' : '新会话')
 
   return (
-    <div className="screen" ref={screenRef}>
-      <div
-        className="scroll"
-        ref={scrollRef}
-        onScroll={(e) => {
-          const el = e.currentTarget
-          nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140
-        }}
-      >
-        <div className="thread" style={{ paddingBottom: 'calc(var(--composer-h, 120px) + 16px)' }}>
-          {session.hasEarlier && (
-            <button className="steps-row" style={{ margin: '4px auto 12px' }} onClick={session.loadAll}>
-              <span className="lbl">加载更早的消息</span>
-            </button>
-          )}
-          {id && !state && !session.error && (
-            <div className="empty">
-              <Spinner />
-            </div>
-          )}
-          {session.error && <div className="empty">{session.error}</div>}
-          {blocks.map((b, i) => {
-            if (b.type === 'user') return <UserMsg key={b.item.id} item={b.item} />
-            if (b.type === 'text')
+    <FileLinkContext.Provider value={fileScope}>
+      <div className="screen" ref={screenRef}>
+        <div
+          className="scroll"
+          ref={scrollRef}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140
+          }}
+        >
+          <div className="thread" style={{ paddingBottom: 'calc(var(--composer-h, 120px) + 16px)' }}>
+            {session.hasEarlier && (
+              <button className="steps-row" style={{ margin: '4px auto 12px' }} onClick={session.loadAll}>
+                <span className="lbl">加载更早的消息</span>
+              </button>
+            )}
+            {id && !state && !session.error && (
+              <div className="empty">
+                <Spinner />
+              </div>
+            )}
+            {session.error && <div className="empty">{session.error}</div>}
+            {blocks.map((b, i) => {
+              if (b.type === 'user') return <UserMsg key={b.item.id} item={b.item} />
+              if (b.type === 'text')
+                return (
+                  <div className="msg-text" key={b.item.id}>
+                    <Markdown text={b.item.text} />
+                    {b.last && !b.item.streaming && !(busy && i === blocks.length - 1) && <MsgActions text={b.item.text} />}
+                  </div>
+                )
+              if (b.type === 'steps')
+                return (
+                  <StepsRow
+                    key={b.id}
+                    items={b.items}
+                    live={busy}
+                    onOpen={() => {
+                      setSteps(b.items)
+                      setStepsId(b.id)
+                    }}
+                  />
+                )
+              if (b.type === 'ask') return <AskCard key={b.item.id} item={b.item} sessionId={id!} />
+              if (b.type === 'task')
+                return <TaskRow key={b.item.id} item={b.item} task={tasks.find((t) => t.id === b.item.taskId)} onOpen={() => setTaskSheet({ openId: b.item.taskId })} />
               return (
-                <div className="msg-text" key={b.item.id}>
-                  <Markdown text={b.item.text} />
-                  {b.last && !b.item.streaming && !(busy && i === blocks.length - 1) && <MsgActions text={b.item.text} />}
+                <div key={b.item.id} className={`notice${b.item.level === 'error' ? ' error' : ''}`}>
+                  {b.item.text}
                 </div>
               )
-            if (b.type === 'steps')
-              return (
-                <StepsRow
-                  key={b.id}
-                  items={b.items}
-                  live={busy}
-                  onOpen={() => {
-                    setSteps(b.items)
-                    setStepsId(b.id)
-                  }}
-                />
-              )
-            if (b.type === 'ask') return <AskCard key={b.item.id} item={b.item} sessionId={id!} />
-            if (b.type === 'task')
-              return <TaskRow key={b.item.id} item={b.item} task={tasks.find((t) => t.id === b.item.taskId)} onOpen={() => setTaskSheet({ openId: b.item.taskId })} />
-            return (
-              <div key={b.item.id} className={`notice${b.item.level === 'error' ? ' error' : ''}`}>
-                {b.item.text}
-              </div>
-            )
-          })}
-          {status === 'running' && !streamingText && <Thinking since={lastUserTs} />}
-        </div>
-      </div>
-
-      <header className="topbar">
-        <div className="left">
-          <button className="circle-btn" onClick={back} aria-label="返回">
-            <ChevronLeft size={25} strokeWidth={1.8} />
-          </button>
-        </div>
-        <div className="title">
-          <h1>{title}</h1>
-          {!id && desktop ? (
-            <button className="sub sub-link" onClick={() => setPickDir(true)}>
-              {device?.name ?? ''} · {shortPath(cwd)}
-            </button>
-          ) : (
-            <div className="sub">{device?.name ?? ''}</div>
-          )}
-        </div>
-        <div className="right">
-          {busy && (
-            <span className="circle-btn">
-              <span className="ring" />
-            </span>
-          )}
-          {id && (
-            <button className="circle-btn" onClick={() => setMenu(true)} aria-label="更多">
-              <MoreHorizontal size={22} strokeWidth={2} />
-            </button>
-          )}
-        </div>
-      </header>
-
-      <div className="composer-wrap" ref={composerRef}>
-        {runningTasks > 0 && (
-          <button className="tasks-pill" onClick={() => setTaskSheet({ openId: null })}>
-            <Spinner size={14} />
-            {runningTasks} 个后台任务
-          </button>
-        )}
-        {pendingPerm && id && <PermissionCard tool={pendingPerm} sessionId={id} />}
-        {status === 'busy_elsewhere' ? (
-          <div className="busy-note">
-            <span className="ring" style={{ width: 16, height: 16, borderWidth: 2 }} /> 正在别处运行
+            })}
+            {status === 'running' && !streamingText && <Thinking since={lastUserTs} />}
           </div>
-        ) : (
-          <Composer
-            key={id ?? 'new'}
-            busy={busy}
+        </div>
+
+        <header className="topbar">
+          <div className="left">
+            <button className="circle-btn" onClick={back} aria-label="返回">
+              <ChevronLeft size={25} strokeWidth={1.8} />
+            </button>
+          </div>
+          <div className="title">
+            <h1>{title}</h1>
+            {!id && desktop ? (
+              <button className="sub sub-link" onClick={() => setPickDir(true)}>
+                {device?.name ?? ''} · {shortPath(cwd)}
+              </button>
+            ) : (
+              <div className="sub">{device?.name ?? ''}</div>
+            )}
+          </div>
+          <div className="right">
+            {busy && (
+              <span className="circle-btn">
+                <span className="ring" />
+              </span>
+            )}
+            {id && (
+              <button className="circle-btn" onClick={() => setMenu(true)} aria-label="更多">
+                <MoreHorizontal size={22} strokeWidth={2} />
+              </button>
+            )}
+          </div>
+        </header>
+
+        <div className="composer-wrap" ref={composerRef}>
+          {runningTasks > 0 && (
+            <button className="tasks-pill" onClick={() => setTaskSheet({ openId: null })}>
+              <Spinner size={14} />
+              {runningTasks} 个后台任务
+            </button>
+          )}
+          {pendingPerm && id && <PermissionCard tool={pendingPerm} sessionId={id} />}
+          {status === 'busy_elsewhere' ? (
+            <div className="busy-note">
+              <span className="ring" style={{ width: 16, height: 16, borderWidth: 2 }} /> 正在别处运行
+            </div>
+          ) : (
+            <Composer
+              key={id ?? 'new'}
+              busy={busy}
+              sessionId={id}
+              provider={provider}
+              model={model}
+              modelLabel={modelLabel}
+              effort={effort}
+              classifierModel={classifierModel}
+              mode={mode}
+              models={models}
+              providers={providers}
+              onModel={changeModel}
+              onEffort={changeEffort}
+              onClassifier={changeClassifier}
+              onMode={changeMode}
+              onSend={send}
+              onStop={() => id && void api.interrupt(id)}
+              autoFocus={!id || desktop}
+              enterSends={desktop}
+            />
+          )}
+        </div>
+
+        {steps && (
+          <StepsSheet
+            steps={steps}
             sessionId={id}
-            provider={provider}
-            model={model}
-            modelLabel={modelLabel}
-            effort={effort}
-            classifierModel={classifierModel}
-            mode={mode}
-            models={models}
-            providers={providers}
-            onModel={changeModel}
-            onEffort={changeEffort}
-            onClassifier={changeClassifier}
-            onMode={changeMode}
-            onSend={send}
-            onStop={() => id && void api.interrupt(id)}
-            autoFocus={!id || desktop}
-            enterSends={desktop}
+            live={!!state?.live}
+            onOpenTask={(taskId) => {
+              setSteps(null)
+              setStepsId(null)
+              setTaskSheet({ openId: taskId })
+            }}
+            onClose={() => {
+              setSteps(null)
+              setStepsId(null)
+            }}
+          />
+        )}
+        {taskSheet && id && <TasksSheet sessionId={id} tasks={tasks} live={!!state?.live} openId={taskSheet.openId} onClose={() => setTaskSheet(null)} />}
+        {menu && id && state && (
+          <SessionMenu
+            state={state}
+            taskCount={tasks.length}
+            onTasks={() => {
+              setMenu(false)
+              setTaskSheet({ openId: null })
+            }}
+            onClose={() => setMenu(false)}
+            onState={session.setState}
+          />
+        )}
+        {pickDir && (
+          <DirPicker
+            start={cwd}
+            onBack={() => setPickDir(false)}
+            onClose={() => setPickDir(false)}
+            onPick={(p) => {
+              setPickDir(false)
+              navigate(`/new?cwd=${encodeURIComponent(p)}`, true)
+            }}
           />
         )}
       </div>
-
-      {steps && (
-        <StepsSheet
-          steps={steps}
-          sessionId={id}
-          live={!!state?.live}
-          onOpenTask={(taskId) => {
-            setSteps(null)
-            setStepsId(null)
-            setTaskSheet({ openId: taskId })
-          }}
-          onClose={() => {
-            setSteps(null)
-            setStepsId(null)
-          }}
-        />
-      )}
-      {taskSheet && id && <TasksSheet sessionId={id} tasks={tasks} live={!!state?.live} openId={taskSheet.openId} onClose={() => setTaskSheet(null)} />}
-      {menu && id && state && (
-        <SessionMenu
-          state={state}
-          taskCount={tasks.length}
-          onTasks={() => {
-            setMenu(false)
-            setTaskSheet({ openId: null })
-          }}
-          onClose={() => setMenu(false)}
-          onState={session.setState}
-        />
-      )}
-      {pickDir && (
-        <DirPicker
-          start={cwd}
-          onBack={() => setPickDir(false)}
-          onClose={() => setPickDir(false)}
-          onPick={(p) => {
-            setPickDir(false)
-            navigate(`/new?cwd=${encodeURIComponent(p)}`, true)
-          }}
-        />
-      )}
-    </div>
+    </FileLinkContext.Provider>
   )
 }
 

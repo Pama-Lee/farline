@@ -8,6 +8,7 @@ import { sessionActivity } from './activity.ts'
 import { isAuthed, login, logout, requireAuth, setPassword } from './auth.ts'
 import { config, underFsRoot } from './config.ts'
 import { allViews, cachedView, catalog, createView, defaultModel, models, openView, providerLabel, providerReady, warmModels } from './live.ts'
+import { existsFile, readPath, resolvePaths } from './files.ts'
 import { noteOrigin } from './origin.ts'
 import { getPlugin, listPlugins, loadPlugins, pluginAsset, pluginFetch, pluginInfo, pluginStatus, saveSettings, setEnabled, testNotification } from './plugins/host.ts'
 import { subscribe, unsubscribe, vapidPublicKey, notify } from './push.ts'
@@ -339,6 +340,37 @@ api.get('/file', (c) => {
   const type = IMAGE_EXT[extname(p).toLowerCase()]
   if (!type || !underFsRoot(p) || !existsSync(p) || statSync(p).size > 20 * 1024 * 1024) return c.json({ error: 'not found' }, 404)
   return c.body(readFileSync(p), 200, { 'content-type': type, 'cache-control': 'private, max-age=300' })
+})
+
+// Paths written in messages → files on disk, using where the session has been working.
+api.post('/fs/resolve', async (c) => {
+  const body = await c.req.json<{ paths?: unknown; sessionId?: string; base?: string }>().catch(() => null)
+  if (!body || !Array.isArray(body.paths)) return c.json({ error: 'bad request' }, 400)
+  const view = body.sessionId ? await openView(body.sessionId).catch(() => undefined) : undefined
+  const paths = body.paths.filter((p): p is string => typeof p === 'string' && p.length < 500)
+  return c.json(resolvePaths(paths, { view, base: typeof body.base === 'string' ? body.base : undefined, cwd: config.defaultCwd }))
+})
+
+api.get('/fs/read', (c) => {
+  const r = readPath(c.req.query('path') ?? '')
+  return r ? c.json(r) : c.json({ error: '找不到这个文件' }, 404)
+})
+
+// The file itself. Never rendered as a page on our origin: text is served as
+// plain text and everything runs sandboxed.
+api.get('/fs/raw', (c) => {
+  const file = existsFile(c.req.query('path') ?? '')
+  if (!file || statSync(file).size > 100 * 1024 * 1024) return c.json({ error: 'not found' }, 404)
+  const ext = extname(file).toLowerCase()
+  const type = ext === '.svg' ? 'image/svg+xml' : (IMAGE_EXT[ext] ?? (c.req.query('download') ? 'application/octet-stream' : 'text/plain; charset=utf-8'))
+  const headers: Record<string, string> = {
+    'content-type': type,
+    'cache-control': 'private, no-cache',
+    'content-security-policy': 'sandbox',
+    'x-content-type-options': 'nosniff',
+  }
+  if (c.req.query('download')) headers['content-disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(file.split('/').pop()!)}`
+  return c.body(readFileSync(file), 200, headers)
 })
 
 api.get('/fs', (c) => {

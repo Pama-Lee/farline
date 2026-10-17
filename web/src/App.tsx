@@ -5,7 +5,9 @@ import { CATALOG_CHANGED, api, setUnauthorizedHandler, type DeviceInfo } from '.
 import { useRoute } from './lib/router.ts'
 import { useDesktop } from './lib/useDesktop.ts'
 import { closeViewer, useViewer } from './lib/viewer.ts'
+import { FilePanel } from './components/FilePanel.tsx'
 import { ImageViewer } from './components/ImageViewer.tsx'
+import { closeFiles, useFiles } from './lib/files.ts'
 import { syncPlugins } from './plugins/runtime.tsx'
 import { Home } from './screens/Home.tsx'
 import { Login } from './screens/Login.tsx'
@@ -19,10 +21,19 @@ export function App() {
   const route = useRoute()
   const desktop = useDesktop()
   const viewer = useViewer()
+  const files = useFiles()
 
-  // A viewer belongs to the thread it was opened from.
+  // Viewers belong to the thread they were opened from.
   const routeKey = route.name === 'session' ? route.id : route.name
-  useEffect(() => closeViewer(), [routeKey])
+  useEffect(() => {
+    closeViewer()
+    closeFiles()
+  }, [routeKey])
+  // Files on the left and an image on the right would squeeze the thread.
+  const openedFile = files?.stack[0]?.path
+  useEffect(() => {
+    if (openedFile && desktop) closeViewer()
+  }, [openedFile, desktop])
 
   const boot = useCallback(async () => {
     try {
@@ -75,8 +86,8 @@ export function App() {
         <SessionScreen key={`new:${route.name === 'new' ? route.cwd : ''}`} id={null} newCwd={route.name === 'new' ? route.cwd || undefined : undefined} device={device} catalog={catalog} />
       )
     body = (
-      <div className={`desktop${viewer ? ' with-panel' : ''}`}>
-        <Sidebar device={device} activeId={route.name === 'session' ? route.id : null} onLogout={() => setAuthed(false)} />
+      <div className={`desktop${viewer ? ' with-panel' : ''}${files ? ' with-files' : ''}`}>
+        {files ? <FilePanel desktop /> : <Sidebar device={device} activeId={route.name === 'session' ? route.id : null} onLogout={() => setAuthed(false)} />}
         <main className="main-pane">{main}</main>
       </div>
     )
@@ -88,6 +99,7 @@ export function App() {
     <>
       {body}
       {authed && <ImageViewer desktop={desktop} />}
+      {authed && !desktop && <FilePanel desktop={false} />}
       <ToastHost />
     </>
   )

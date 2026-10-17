@@ -10,6 +10,7 @@
 - 任意目录起会话，目录选择器可以浏览整台服务器
 - 工具调用、思考过程、图片、提问（AskUserQuestion）、权限确认
 - 后台任务：后台命令、子代理、监控单独列出，看实时输出、单独停止，正在跑的命令可以转入后台
+- 消息里提到的文件和目录可以点开：电脑上在左侧查看，手机上全屏；代码高亮带行号，Markdown 可预览
 - 切模型、思考强度、权限模式，中途可改
 - 模型可选 Anthropic 或 DeepSeek（V4 Pro / Flash，100 万上下文，自动模式的判断也由 DeepSeek 完成）。DeepSeek 的 API key 在设置页填，能看余额
 - 插件：接新的模型提供商、通知渠道、会话钩子，扩展界面，见 [docs/plugins.md](docs/plugins.md)。内置企业微信通知和任意 Anthropic 兼容接口
@@ -69,6 +70,7 @@ A self-hosted workspace for coding agents. Install it on your own server, use it
 - Start a session in any directory on the server
 - Tool calls, thinking, images, AskUserQuestion, permission prompts
 - Background tasks (shell commands, subagents, monitors): live output, per-task stop, move a running command to the background
+- Files and folders mentioned in messages open in a viewer: a left panel on desktop, full screen on phones
 - Switch model, effort and permission mode mid-session
 - Models from Anthropic or DeepSeek (V4 Pro / Flash, 1M context, DeepSeek also judges auto mode); the DeepSeek API key is set on the settings page, which also shows the balance
 - Plugins add model providers, notification channels, session hooks and UI extensions; see [docs/plugins.md](docs/plugins.md) (in Chinese)

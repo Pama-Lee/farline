@@ -896,7 +896,7 @@ function Composer(p: {
             else setSheet('model')
           }}
         >
-          {p.modelLabel}
+          <span className="ml">{p.modelLabel}</span>
           {p.effort && <span className="eff">{EFFORT_LABELS[p.effort]}</span>}
         </button>
         <span className="spacer" />

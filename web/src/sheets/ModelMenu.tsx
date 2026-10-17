@@ -1,8 +1,8 @@
 // The model picker as a menu anchored to the model button, for skins that ask
 // for it (--fl-model-picker: menu). Settings first, the model one level down.
 import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useState } from 'react'
-import type { ModelOption, Provider } from '../../../shared/types.ts'
+import { useEffect, useRef, useState } from 'react'
+import type { ModelOption } from '../../../shared/types.ts'
 import { Popover } from '../components/Popover.tsx'
 import { EFFORT_LABELS, EFFORT_ORDER, isCurrent, type ModelPickerProps } from './ModelSheet.tsx'
 
@@ -12,7 +12,8 @@ export function wantsMenuPicker() {
 
 export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
   const [view, setView] = useState<'main' | 'model' | 'effort' | 'classifier'>('main')
-  const [tab, setTab] = useState<Provider>(p.provider)
+  const [q, setQ] = useState('')
+  const listRef = useRef<HTMLDivElement>(null)
   const available = p.providers.filter((pv) => p.models.some((m) => m.provider === pv.id))
   const current = p.models.find((m) => isCurrent(m, p.provider, p.model))
   const classifiers = (p.providers.find((pv) => pv.id === p.provider)?.classifierModels ?? [])
@@ -36,37 +37,48 @@ export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
   )
   const modelRow = (m: ModelOption) => (
     <button
-      className="menu-row"
+      className={`menu-row${current === m ? ' current' : ''}`}
       key={m.provider + m.value}
       onClick={() => {
         p.onModel(m)
         p.onClose()
       }}
     >
-      <span className="grow">{m.label}</span>
+      <span className="grow" title={m.label}>{m.label}</span>
       {current === m && check}
     </button>
   )
 
+  // Open the model list at the current model.
+  useEffect(() => {
+    if (view === 'model' && !q) listRef.current?.querySelector('.current')?.scrollIntoView({ block: 'center' })
+  }, [view])
+
   let body
   if (view === 'model') {
-    const inTab = p.models.filter((m) => m.provider === tab)
-    const more = inTab.filter((m) => m.more)
+    // Every provider's models in one list, grouped; a search box once it gets long.
+    const needle = q.trim().toLowerCase()
+    const match = (m: ModelOption, label: string) => !needle || m.label.toLowerCase().includes(needle) || m.value.toLowerCase().includes(needle) || label.toLowerCase().includes(needle)
+    const groups = available
+      .map((pv) => ({ pv, models: p.models.filter((m) => m.provider === pv.id && match(m, pv.label)) }))
+      .filter((g) => g.models.length > 0)
     body = (
       <>
         {back('模型')}
-        {available.length > 1 && (
-          <div className="menu-tabs">
-            {available.map((pv) => (
-              <button key={pv.id} className={tab === pv.id ? 'on' : undefined} onClick={() => setTab(pv.id)}>
-                {pv.label}
-              </button>
-            ))}
+        {p.models.length > 8 && (
+          <div className="menu-search">
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="搜索模型" autoFocus={!('ontouchstart' in window)} spellCheck={false} autoComplete="off" />
           </div>
         )}
-        {inTab.filter((m) => !m.more).map(modelRow)}
-        {more.length > 0 && <div className="menu-sep" />}
-        {more.map(modelRow)}
+        <div className="menu-scroll" ref={listRef}>
+          {groups.map((g) => (
+            <div className="menu-group" key={g.pv.id}>
+              {available.length > 1 && <div className="menu-label">{g.pv.label}</div>}
+              {g.models.map(modelRow)}
+            </div>
+          ))}
+          {groups.length === 0 && <div className="menu-empty">没有匹配的模型</div>}
+        </div>
       </>
     )
   } else if (view === 'effort' && efforts) {

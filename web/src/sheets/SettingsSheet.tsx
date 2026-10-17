@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Check, ChevronRight, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, ChevronRight, Download, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
@@ -8,7 +8,7 @@ import { currentPushSubscription, disablePush, enablePush, isStandalone, pushSup
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { setStepsView, useStepsView, type StepsView } from '../lib/prefs.ts'
 
-type View = { name: 'main' } | { name: 'plugins' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
 
 const STEPS_VIEWS: { id: StepsView; label: string }[] = [
   { id: 'auto', label: '自动' },
@@ -16,7 +16,7 @@ const STEPS_VIEWS: { id: StepsView; label: string }[] = [
   { id: 'inline', label: '在对话里展开' },
 ]
 
-const SOURCE: Record<PluginInfo['source'], string> = { builtin: '内置', local: '本地', npm: 'npm' }
+const SOURCE: Record<PluginInfo['source'], string> = { builtin: '内置', local: '本地', npm: 'npm', github: 'GitHub' }
 
 // A space between Chinese and a Latin word: 移除 API key.
 const join = (zh: string, label: string) => (/^[A-Za-z0-9]/.test(label) ? `${zh} ${label}` : `${zh}${label}`)
@@ -88,7 +88,17 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
     if (p)
       return (
         <Sheet title={p.name} onClose={onClose} onBack={() => setView(view.back === 'main' ? { name: 'main' } : { name: 'plugins' })} size={p.settings.length > 2 || settingsPanels.some((x) => x.pluginId === p.id) ? 'tall' : 'auto'}>
-          <PluginDetail info={p} status={statuses[p.id]} onToggle={() => void toggle(p)} onChange={changed} />
+          <PluginDetail
+            info={p}
+            status={statuses[p.id]}
+            onToggle={() => void toggle(p)}
+            onChange={changed}
+            onRemoved={async () => {
+              setPlugins(await api.plugins().catch(() => null))
+              window.dispatchEvent(new Event(CATALOG_CHANGED))
+              setView({ name: 'plugins' })
+            }}
+          />
         </Sheet>
       )
   }
@@ -135,6 +145,20 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       </Sheet>
     )
 
+  if (view.name === 'install')
+    return (
+      <Sheet title="从 GitHub 安装" onClose={onClose} onBack={() => setView({ name: 'plugins' })}>
+        <InstallForm
+          onInstalled={(info) => {
+            setPlugins((list) => [...(list ?? []).filter((x) => x.id !== info.id), info])
+            loadStatus(info)
+            window.dispatchEvent(new Event(CATALOG_CHANGED))
+            setView({ name: 'plugin', id: info.id, back: 'plugins' })
+          }}
+        />
+      </Sheet>
+    )
+
   if (view.name === 'plugins')
     return (
       <Sheet title="插件" onClose={onClose} onBack={() => setView({ name: 'main' })}>
@@ -159,6 +183,11 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
             ))}
           </div>
         )}
+        <button className="row-btn" style={{ marginTop: 12 }} onClick={() => setView({ name: 'install' })}>
+          <Download size={19} strokeWidth={1.6} />
+          <span className="grow">从 GitHub 安装</span>
+          <ChevronRight size={18} color="var(--text-3)" />
+        </button>
       </Sheet>
     )
 
@@ -219,7 +248,98 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
   )
 }
 
-function PluginDetail({ info, status, onToggle, onChange }: { info: PluginInfo; status?: PluginStatus; onToggle: () => void; onChange: (p: PluginInfo) => void }) {
+function InstallForm({ onInstalled }: { onInstalled: (p: PluginInfo) => void }) {
+  const [source, setSource] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const install = async () => {
+    if (busy || !source.trim()) return
+    if (!confirm('插件代码会在这台服务器上运行，确认安装？')) return
+    setBusy(true)
+    setErr('')
+    try {
+      const info = await api.installPlugin(source.trim())
+      toast(`已安装 ${info.name}`)
+      onInstalled(info)
+    } catch (e: any) {
+      setErr(e?.message ?? '安装失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="plugin-form">
+      <input
+        className="path-input"
+        value={source}
+        onChange={(e) => setSource(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void install()}
+        placeholder="owner/repo"
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        autoFocus
+      />
+      <button className="black-pill wide" disabled={busy || !source.trim()} onClick={() => void install()}>
+        {busy ? <Spinner size={18} /> : '安装'}
+      </button>
+      {err && <div className="err">{err}</div>}
+    </div>
+  )
+}
+
+function RemoteRows({ info, onChange, onRemoved }: { info: PluginInfo; onChange: (p: PluginInfo) => void; onRemoved: () => void }) {
+  const [busy, setBusy] = useState<'update' | 'remove' | null>(null)
+  const r = info.remote!
+  const update = async () => {
+    if (busy) return
+    setBusy('update')
+    try {
+      const res = await api.updatePlugin(info.id)
+      onChange(res.plugin)
+      toast(res.updated ? `已更新到 ${res.plugin.version}` : '已是最新')
+    } catch (e: any) {
+      toast(e?.message ?? '更新失败')
+    } finally {
+      setBusy(null)
+    }
+  }
+  const remove = async () => {
+    if (busy || !confirm(`确认卸载「${info.name}」？`)) return
+    setBusy('remove')
+    try {
+      await api.uninstallPlugin(info.id)
+      toast('已卸载')
+      onRemoved()
+    } catch (e: any) {
+      toast(e?.message ?? '卸载失败')
+      setBusy(null)
+    }
+  }
+  const url = `https://github.com/${r.repo}${r.ref || r.path ? `/tree/${r.ref ?? r.commit}${r.path ? `/${r.path}` : ''}` : ''}`
+  return (
+    <div className="group" style={{ marginTop: 12 }}>
+      <a className="option" href={url} target="_blank" rel="noreferrer">
+        <span className="grow">{r.repo}</span>
+        <span className="hint">
+          {r.ref ? `${r.ref} · ` : ''}
+          {r.commit.slice(0, 7)}
+        </span>
+        <ArrowUpRight size={18} color="var(--text-2)" />
+      </a>
+      <button className="option" onClick={() => void update()} disabled={!!busy}>
+        <span className="grow">检查更新</span>
+        {busy === 'update' && <Spinner size={18} />}
+      </button>
+      <button className="option" onClick={() => void remove()} disabled={!!busy}>
+        <span className="grow danger">卸载</span>
+        {busy === 'remove' && <Spinner size={18} />}
+      </button>
+    </div>
+  )
+}
+
+function PluginDetail({ info, status, onToggle, onChange, onRemoved }: { info: PluginInfo; status?: PluginStatus; onToggle: () => void; onChange: (p: PluginInfo) => void; onRemoved: () => void }) {
   const { settingsPanels, errors } = usePlugins()
   const [testing, setTesting] = useState(false)
   const error = info.error ?? errors[info.id]
@@ -305,6 +425,8 @@ function PluginDetail({ info, status, onToggle, onChange }: { info: PluginInfo; 
             </div>
           )
         })}
+
+      {info.remote && <RemoteRows info={info} onChange={onChange} onRemoved={onRemoved} />}
     </>
   )
 }

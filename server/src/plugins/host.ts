@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, s
 import { join, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Hono } from 'hono'
-import type { PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
+import type { PluginInfo, PluginStatus, RemoteSource, SettingFieldView } from '../../../shared/types.ts'
 import { config } from '../config.ts'
 import { allViews, cachedView, openView } from '../live.ts'
 import { sendTo } from '../push.ts'
@@ -56,6 +56,23 @@ interface Saved {
 
 const stateFile = join(config.dataDir, 'plugins.json')
 let saved: Record<string, Saved> = load()
+export const userPluginsDir = join(config.dataDir, 'plugins')
+// Plugins installed from GitHub, by id. They live in <dataDir>/plugins/<id>.
+const remoteFile = join(userPluginsDir, '.remote.json')
+const remotes: Record<string, RemoteSource> = (() => {
+  try {
+    return JSON.parse(readFileSync(remoteFile, 'utf8'))
+  } catch {
+    return {}
+  }
+})()
+
+function writeRemotes() {
+  mkdirSync(userPluginsDir, { recursive: true })
+  const tmp = `${remoteFile}.tmp`
+  writeFileSync(tmp, JSON.stringify(remotes, null, 1))
+  renameSync(tmp, remoteFile)
+}
 const plugins = new Map<string, Plugin>()
 
 function load(): Record<string, Saved> {
@@ -84,7 +101,7 @@ function writeState(s = saved) {
 
 // ---- discovery ----
 
-function readManifest(dir: string): Manifest | undefined {
+export function readManifest(dir: string): Manifest | undefined {
   try {
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
     const f = pkg.farline
@@ -294,21 +311,78 @@ export async function loadPlugins() {
     }
     plugins.set(manifest.id, { manifest, root: resolve(dir), source, disposables: [], listeners: new Set(), providerIds: new Set(), state: 'disabled' })
   }
-  for (const p of plugins.values()) {
-    if (isEnabled(p)) await activate(p)
-    else {
-      // Read settings and env names without running it.
-      try {
-        p.def = await importDefinition(p)
-        for (const f of fields(p)) if (f.env) secretEnv.add(f.env)
-      } catch (e: any) {
-        p.state = 'error'
-        p.error = String(e?.message ?? e).slice(0, 300)
-      }
-    }
-  }
+  // Disabled ones are read for their settings and env names, not run.
+  for (const p of plugins.values()) await start(p)
   const active = [...plugins.values()].filter((p) => p.state === 'active').map((p) => p.manifest.id)
   if (plugins.size) console.log(`[plugins] ${active.length}/${plugins.size} active: ${active.join(', ')}`)
+}
+
+// ---- installing from GitHub ----
+
+function isRemote(p: Plugin) {
+  return p.source === 'local' && !!remotes[p.manifest.id] && p.root === resolve(userPluginsDir, p.manifest.id)
+}
+
+export function remoteOf(p: Plugin): RemoteSource | undefined {
+  return isRemote(p) ? remotes[p.manifest.id] : undefined
+}
+
+async function start(p: Plugin) {
+  if (isEnabled(p)) await activate(p)
+  else {
+    try {
+      p.def = await importDefinition(p)
+      for (const f of fields(p)) if (f.env) secretEnv.add(f.env)
+    } catch (e: any) {
+      p.state = 'error'
+      p.error = String(e?.message ?? e).slice(0, 300)
+    }
+  }
+}
+
+// Move an unpacked plugin into place, replacing an earlier install of it.
+// A plugin from GitHub may override a built-in one, never a local or npm one.
+export async function installDir(dir: string, remote: RemoteSource): Promise<Plugin> {
+  const manifest = readManifest(dir)
+  if (!manifest) throw new Error('没有找到 Farline 插件：package.json 里缺少 farline 字段')
+  const id = manifest.id
+  const existing = plugins.get(id)
+  if (existing && existing.source !== 'builtin' && !isRemote(existing)) throw new Error(`已经有一个 id 为 ${id} 的${existing.source === 'npm' ? ' npm ' : '本地'}插件`)
+  const target = join(userPluginsDir, id)
+  if (existing && existing.state !== 'disabled') await deactivate(existing)
+  const old = existsSync(target) ? `${target}.old-${Date.now()}` : null
+  if (old) renameSync(target, old)
+  renameSync(dir, target)
+  if (old) rmSync(old, { recursive: true, force: true })
+  remotes[id] = remote
+  writeRemotes()
+  const p: Plugin = { manifest: readManifest(target)!, root: resolve(target), source: 'local', disposables: [], listeners: new Set(), providerIds: existing?.providerIds ?? new Set(), state: 'disabled' }
+  plugins.set(id, p)
+  await start(p)
+  restartSessionsOf(p)
+  return p
+}
+
+export async function uninstall(p: Plugin) {
+  if (!isRemote(p)) throw new Error('只能卸载从 GitHub 安装的插件')
+  const id = p.manifest.id
+  if (p.state !== 'disabled') await deactivate(p)
+  restartSessionsOf(p)
+  rmSync(p.root, { recursive: true, force: true })
+  delete remotes[id]
+  writeRemotes()
+  delete saved[id]
+  writeState()
+  plugins.delete(id)
+  // A built-in plugin it stood in for comes back.
+  for (const { dir, source } of discover()) {
+    if (source !== 'builtin') continue
+    const m = readManifest(dir)
+    if (m?.id !== id) continue
+    const b: Plugin = { manifest: m, root: resolve(dir), source, disposables: [], listeners: new Set(), providerIds: new Set(), state: 'disabled' }
+    plugins.set(id, b)
+    await start(b)
+  }
 }
 
 // ---- management API ----
@@ -326,7 +400,8 @@ export function pluginInfo(p: Plugin): PluginInfo {
     id: p.manifest.id,
     name: p.manifest.name,
     version: p.manifest.version,
-    source: p.source,
+    source: isRemote(p) ? 'github' : p.source,
+    ...(isRemote(p) ? { remote: remotes[p.manifest.id] } : {}),
     enabled: isEnabled(p),
     state: p.state,
     error: p.error,
@@ -341,7 +416,7 @@ export function pluginInfo(p: Plugin): PluginInfo {
 }
 
 export function listPlugins(): PluginInfo[] {
-  const order = { builtin: 0, local: 1, npm: 2 }
+  const order = { builtin: 0, local: 1, github: 1, npm: 2 }
   return [...plugins.values()].sort((a, b) => order[a.source] - order[b.source] || a.manifest.name.localeCompare(b.manifest.name)).map(pluginInfo)
 }
 

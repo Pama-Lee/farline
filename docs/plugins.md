@@ -26,7 +26,24 @@ DeepSeek、兼容接口、企业微信这三个内置功能本身就是插件，
 
 `~/.farline` 指数据目录（`FARLINE_DATA_DIR`）。本地插件和内置插件 id 相同时，用本地的。
 
-装好后重启 Farline，到「设置 → 插件」里开关。启停不用重启：停用时插件注册的东西全部撤掉，再启用会重新加载服务端代码，所以改了代码停用再启用就能生效。前端代码改了要刷新页面。
+### 从 GitHub 安装
+
+「设置 → 插件 → 从 GitHub 安装」，填仓库，不用重启。这些写法都行：
+
+```
+owner/repo
+owner/repo#v1.2.0                      分支、标签或提交
+owner/repo/path/to/plugin              仓库里的某个目录
+https://github.com/owner/repo/tree/main/path/to/plugin
+```
+
+只填仓库时，根目录是插件就装根目录；不是的话在仓库里找，只有一个插件就装它，有多个会列出来让你选。
+
+装法是下载那个提交的源码包，解压到 `~/.farline/plugins/<id>`，有 `dependencies` 就跑一次 `npm install --omit=dev --ignore-scripts`（不跑安装脚本，所以插件要自带构建好的代码）。来源记在 `~/.farline/plugins/.remote.json`，插件详情里可以检查更新（同一个分支或标签的最新提交）和卸载。
+
+从 GitHub 装的插件可以顶替同 id 的内置插件，卸载后内置的回来；和本地插件、npm 插件 id 冲突时拒绝安装。私有仓库要设 `FARLINE_GITHUB_TOKEN`。
+
+本地和 npm 插件装好后重启 Farline，到「设置 → 插件」里开关。启停不用重启：停用时插件注册的东西全部撤掉，再启用会重新加载服务端代码，所以改了代码停用再启用就能生效。前端代码改了要刷新页面。
 
 ## 清单
 

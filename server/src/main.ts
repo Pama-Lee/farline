@@ -10,7 +10,8 @@ import { config, underFsRoot } from './config.ts'
 import { allViews, cachedView, catalog, createView, defaultModel, models, openView, providerLabel, providerReady, warmModels } from './live.ts'
 import { existsFile, readPath, resolvePaths } from './files.ts'
 import { noteOrigin } from './origin.ts'
-import { getPlugin, listPlugins, loadPlugins, pluginAsset, pluginFetch, pluginInfo, pluginStatus, saveSettings, setEnabled, testNotification } from './plugins/host.ts'
+import { getPlugin, listPlugins, loadPlugins, pluginAsset, pluginFetch, pluginInfo, pluginStatus, remoteOf, saveSettings, setEnabled, testNotification, uninstall } from './plugins/host.ts'
+import { installFromGitHub } from './plugins/remote.ts'
 import { subscribe, unsubscribe, vapidPublicKey, notify } from './push.ts'
 import { save, state } from './store.ts'
 import { requestTitle } from './titles.ts'
@@ -53,6 +54,48 @@ api.get('/models', (c) => c.json(catalog()))
 // ---- plugins ----
 
 api.get('/plugins', (c) => c.json(listPlugins()))
+
+// One install or update at a time.
+let installing: Promise<unknown> = Promise.resolve()
+const serially = <T>(fn: () => Promise<T>): Promise<T> => {
+  const next = installing.then(fn, fn)
+  installing = next.catch(() => undefined)
+  return next
+}
+
+api.post('/plugins/install', async (c) => {
+  const { source } = await c.req.json<{ source?: string }>().catch(() => ({ source: undefined }))
+  if (!source?.trim()) return c.json({ error: '填 owner/repo 或 GitHub 仓库地址' }, 400)
+  try {
+    const r = await serially(() => installFromGitHub(source))
+    return c.json(r.updated ? pluginInfo(r.plugin) : { error: '已安装' })
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '安装失败' }, 400)
+  }
+})
+
+api.post('/plugins/:id/update', async (c) => {
+  const p = getPlugin(c.req.param('id'))
+  const remote = p && remoteOf(p)
+  if (!p || !remote) return c.json({ error: 'not found' }, 404)
+  try {
+    const r = await serially(() => installFromGitHub({ repo: remote.repo, ref: remote.ref, path: remote.path }, remote.commit))
+    return c.json({ updated: r.updated, plugin: pluginInfo(r.updated ? r.plugin : p) })
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '更新失败' }, 400)
+  }
+})
+
+api.delete('/plugins/:id', async (c) => {
+  const p = getPlugin(c.req.param('id'))
+  if (!p) return c.json({ error: 'not found' }, 404)
+  try {
+    await uninstall(p)
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '卸载失败' }, 400)
+  }
+  return c.json({ ok: true })
+})
 
 api.get('/plugins/:id/status', async (c) => {
   const p = getPlugin(c.req.param('id'))

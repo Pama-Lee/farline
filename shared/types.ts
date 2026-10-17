@@ -239,11 +239,21 @@ export interface PluginStatus {
   rows?: { label: string; value: string; tone?: 'danger' }[]
 }
 
+export interface RemoteSource {
+  repo: string
+  ref?: string
+  path?: string
+  commit: string
+  installedAt: number
+}
+
 export interface PluginInfo {
   id: string
   name: string
   version: string
-  source: 'builtin' | 'local' | 'npm'
+  source: 'builtin' | 'local' | 'npm' | 'github'
+  // Where a plugin installed from GitHub came from.
+  remote?: RemoteSource
   enabled: boolean
   state: 'active' | 'disabled' | 'error'
   error?: string

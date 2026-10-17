@@ -10,6 +10,7 @@ export type Block =
   | { type: 'steps'; id: string; items: StepItem[] }
   | { type: 'ask'; item: Extract<Item, { kind: 'ask' }> }
   | { type: 'notice'; item: Extract<Item, { kind: 'notice' }> }
+  | { type: 'task'; item: Extract<Item, { kind: 'task' }> }
 
 export function toBlocks(items: Item[]): Block[] {
   const blocks: Block[] = []
@@ -29,13 +30,14 @@ export function toBlocks(items: Item[]): Block[] {
     else if (it.kind === 'text') blocks.push({ type: 'text', item: it, last: false })
     else if (it.kind === 'ask') blocks.push({ type: 'ask', item: it })
     else if (it.kind === 'notice') blocks.push({ type: 'notice', item: it })
+    else if (it.kind === 'task') blocks.push({ type: 'task', item: it })
   }
   flush()
   // The last text block before each user turn (or the end) gets actions.
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i]
     if (b.type !== 'text') continue
-    const next = blocks.slice(i + 1).find((x) => x.type !== 'notice')
+    const next = blocks.slice(i + 1).find((x) => x.type !== 'notice' && x.type !== 'task')
     if (!next || next.type === 'user') b.last = true
   }
   return blocks
@@ -68,6 +70,7 @@ export function stepLabel(s: StepItem): { l1: string; l2: string } {
   if (s.kind === 'thinking') return { l1: s.streaming ? '正在思考' : '已思考', l2: s.text.replace(/\s+/g, ' ').slice(0, 80) }
   const i = s.input
   const done = s.status !== 'running'
+  if (s.taskId) return { l1: s.name === 'Monitor' ? '已开始监控' : '已转入后台', l2: str(i.description) || str(i.command) || str(i.prompt) }
   switch (s.name) {
     case 'Bash':
       return { l1: done ? '已运行' : '正在运行', l2: str(i.description) || str(i.command) }

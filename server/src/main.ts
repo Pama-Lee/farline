@@ -139,6 +139,7 @@ api.get('/sessions', async (c) => {
       status: view ? view.sessionState().status : now - info.lastModified < 10 * 60_000 && act.running ? 'busy_elsewhere' : 'idle',
       provider: meta?.provider ?? 'claude',
       ...(meta?.provider && meta.provider !== 'claude' ? { providerLabel: providerLabel(meta.provider) } : {}),
+      ...(view?.runningTasks ? { tasks: view.runningTasks } : {}),
     })
   }
   // Started here moments ago, transcript not on disk yet.
@@ -153,6 +154,7 @@ api.get('/sessions', async (c) => {
       status: st.status,
       provider: st.provider,
       ...(st.provider !== 'claude' ? { providerLabel: providerLabel(st.provider) } : {}),
+      ...(v.runningTasks ? { tasks: v.runningTasks } : {}),
     })
   }
   rows.sort((x, y) => y.updatedAt - x.updatedAt)
@@ -257,6 +259,37 @@ api.patch('/sessions/:id', async (c) => {
   if (typeof body.hidden === 'boolean') view.meta.hidden = body.hidden
   await view.update({ permissionMode: body.permissionMode, model: body.model, effort: body.effort, provider: body.provider, classifierModel: body.classifierModel })
   return c.json(view.sessionState())
+})
+
+// ---- background tasks ----
+
+api.get('/sessions/:id/tasks/:taskId/output', async (c) => {
+  const view = await openView(c.req.param('id'))
+  if (!view) return c.json({ error: 'not found' }, 404)
+  return c.json(await view.taskOutput(c.req.param('taskId')))
+})
+
+api.post('/sessions/:id/tasks/:taskId/stop', async (c) => {
+  const view = cachedView(c.req.param('id'))
+  if (!view?.live) return c.json({ error: '会话进程已经结束' }, 409)
+  try {
+    await view.stopTask(c.req.param('taskId'))
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '停止失败' }, 400)
+  }
+  return c.json({ ok: true })
+})
+
+// Move a running foreground command or subagent to the background.
+api.post('/sessions/:id/background', async (c) => {
+  const { toolUseId } = await c.req.json<{ toolUseId?: string }>().catch(() => ({ toolUseId: undefined }))
+  const view = cachedView(c.req.param('id'))
+  try {
+    const ok = (await view?.backgroundTool(toolUseId)) ?? false
+    return c.json({ ok }, ok ? 200 : 409)
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '操作失败' }, 400)
+  }
 })
 
 api.get('/sessions/:id/mcp', async (c) => {

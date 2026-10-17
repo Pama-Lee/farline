@@ -98,6 +98,7 @@ export function Sidebar({ device, activeId, onLogout }: { device: DeviceInfo | n
               <div className="s">
                 {basename(s.cwd) || device?.name}
                 {s.providerLabel && <span className="tag">{s.providerLabel}</span>}
+                {!!s.tasks && <span className="tag">后台 {s.tasks}</span>}
               </div>
             </span>
           </button>

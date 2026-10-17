@@ -6,6 +6,7 @@ import type {
   McpServer,
   PluginInfo,
   PluginStatus,
+  TaskOutput,
   PermissionMode,
   Provider,
   SendBody,
@@ -72,6 +73,9 @@ export const api = {
   update: (id: string, patch: { permissionMode?: PermissionMode; model?: string; effort?: EffortLevel; provider?: Provider; classifierModel?: string; title?: string; hidden?: boolean }) =>
     req<SessionState>('PATCH', `/sessions/${id}`, patch),
   mcp: (id: string) => req<McpServer[]>('GET', `/sessions/${id}/mcp`),
+  taskOutput: (id: string, taskId: string) => req<TaskOutput>('GET', `/sessions/${id}/tasks/${taskId}/output`),
+  stopTask: (id: string, taskId: string) => req<{ ok: true }>('POST', `/sessions/${id}/tasks/${taskId}/stop`),
+  backgroundTool: (id: string, toolUseId: string) => req<{ ok: boolean }>('POST', `/sessions/${id}/background`, { toolUseId }),
   dirs: (path?: string, hidden = false) => req<DirListing>('GET', `/fs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: '1' } : {}) })}`),
   upload: (file: Blob, name: string) => {
     const fd = new FormData()

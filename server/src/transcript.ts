@@ -1,8 +1,25 @@
 // Normalizes Claude Code messages (persisted transcript or live SDK stream)
 // into the flat Item list the web client renders.
-import type { Item, Patch, Question } from '../../shared/types.ts'
+import type { Item, Patch, Question, TaskEndStatus } from '../../shared/types.ts'
 
 const RESULT_LIMIT = 16_000
+const END_STATUSES: TaskEndStatus[] = ['completed', 'failed', 'stopped']
+
+// "…running in background with ID: b67zja3n6", "…moved to the background
+// (ID: bwfy55gsk)" and "…manually backgrounded by user with ID: b95e…" for
+// shells, "Monitor started (task bdez76rg6" for monitors, "Async agent
+// launched … agentId: af57…" for agents.
+function backgroundTaskId(text: string): string | undefined {
+  return (
+    text.match(/background(?:ed by user)? (?:with ID: |\(ID: )([A-Za-z0-9]+)/)?.[1] ??
+    text.match(/^Monitor started \(task ([A-Za-z0-9]+)/)?.[1] ??
+    text.match(/^Async agent launched[\s\S]*?agentId: ([A-Za-z0-9]+)/)?.[1]
+  )
+}
+
+function outputFile(text: string): string | undefined {
+  return text.match(/(?:Output is being written to: |output_file: )(\S+?\.output)\b/)?.[1]
+}
 
 type Block = Record<string, any>
 
@@ -18,6 +35,9 @@ export class ItemLog {
   private blockIds = new Map<number, string>()
   seq = 0
   private sessionId: string
+  // Where background tasks write their output, from tool results and
+  // notifications. Server-side only.
+  taskFiles = new Map<string, string>()
 
   constructor(sessionId: string) {
     this.sessionId = sessionId
@@ -137,7 +157,10 @@ export class ItemLog {
       this.upsert({ ...item, status: b.is_error ? 'cancelled' : 'answered', answer: text, reqId: undefined })
     } else if (item.kind === 'tool') {
       const permission = item.permission?.status === 'pending' ? { ...item.permission, status: 'denied' as const } : item.permission
-      this.upsert({ ...item, status: b.is_error ? 'error' : 'done', result: text, truncated, permission, ...(images.length ? { images } : {}) })
+      const taskId = b.is_error ? undefined : backgroundTaskId(text)
+      const file = taskId && outputFile(text)
+      if (taskId && file) this.taskFiles.set(taskId, file)
+      this.upsert({ ...item, status: b.is_error ? 'error' : 'done', result: text, truncated, permission, ...(images.length ? { images } : {}), ...(taskId ? { taskId } : {}) })
     }
   }
 
@@ -148,11 +171,12 @@ export class ItemLog {
       this.upsert({ kind: 'notice', id: uuid, level: 'info', text: '已中断' })
       return
     }
+    if (/^\s*<task-notification>/.test(text)) return this.applyTaskNotifications(uuid, text, ts)
     const cmd = text.match(/<command-name>([^<]*)<\/command-name>/)
     if (cmd) {
       const args = text.match(/<command-args>([\s\S]*?)<\/command-args>/)?.[1] ?? ''
       text = `${cmd[1]} ${args}`.trim()
-    } else if (/^\s*<(local-command|task-notification|bash-|user-memory|system-reminder)/.test(text) || /^Caveat:/.test(text)) {
+    } else if (/^\s*<(local-command|bash-|user-memory|system-reminder)/.test(text) || /^Caveat:/.test(text)) {
       return
     }
     text = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, '').trim()
@@ -161,6 +185,40 @@ export class ItemLog {
     if (!text && !imageCount && !files.length) return
     const images = Array.from({ length: imageCount }, (_, i) => ({ url: `/api/sessions/${this.sessionId}/images/${uuid}/${i}` }))
     this.upsert({ kind: 'user', id: uuid, text, images: images.length ? images : undefined, files: files.length ? files : undefined, ts })
+  }
+
+  // The harness tells the model about background tasks in user messages,
+  // one <task-notification> block per event.
+  private applyTaskNotifications(uuid: string, text: string, ts?: number) {
+    ;[...text.matchAll(/<task-notification>([\s\S]*?)<\/task-notification>/g)].forEach((m, i) => {
+      const tag = (name: string) => m[1].match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1]?.trim()
+      const taskId = tag('task-id')
+      if (!taskId) return
+      const status = END_STATUSES.find((st) => st === tag('status'))
+      const file = tag('output-file')
+      if (file) this.taskFiles.set(taskId, file)
+      this.taskItem(status ? `task:${taskId}:${status}` : `${uuid}:${i}`, {
+        taskId,
+        toolUseId: tag('tool-use-id'),
+        status,
+        summary: tag('summary') ?? '',
+        result: tag('result')?.slice(0, RESULT_LIMIT),
+        ts,
+      })
+    })
+  }
+
+  // The same ending can arrive twice live (SDK event and the transcript
+  // message); both land on one item.
+  applyTaskEnd(n: { task_id: string; tool_use_id?: string; status: TaskEndStatus; summary: string; output_file?: string }) {
+    if (n.output_file) this.taskFiles.set(n.task_id, n.output_file)
+    this.taskItem(`task:${n.task_id}:${n.status}`, { taskId: n.task_id, toolUseId: n.tool_use_id, status: n.status, summary: n.summary, ts: Date.now() })
+  }
+
+  private taskItem(id: string, t: Omit<Extract<Item, { kind: 'task' }>, 'kind' | 'id'>) {
+    const prev = this.get(id)
+    const p = prev?.kind === 'task' ? prev : undefined
+    this.upsert({ kind: 'task', id, ...t, toolUseId: t.toolUseId ?? p?.toolUseId, result: t.result ?? p?.result, ts: p?.ts ?? t.ts })
   }
 
   // ---- live stream events ----

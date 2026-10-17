@@ -48,6 +48,9 @@ export type Item =
       // Images the tool returned (e.g. Read on a screenshot), served from the transcript.
       images?: ImageRef[]
       permission?: PermissionAsk
+      // Set when the call went on in the background (run_in_background,
+      // a timeout, or moved there by the user).
+      taskId?: string
     }
   | {
       kind: 'ask'
@@ -58,6 +61,27 @@ export type Item =
       answer?: string
     }
   | { kind: 'notice'; id: string; level: 'info' | 'error'; text: string }
+  // A background task reporting back: finished, failed, stopped, or a
+  // monitor event (no status).
+  | { kind: 'task'; id: string; taskId: string; toolUseId?: string; status?: TaskEndStatus; summary: string; result?: string; ts?: number }
+
+export type TaskEndStatus = 'completed' | 'failed' | 'stopped'
+
+export interface BackgroundTask {
+  id: string
+  // local_bash, local_agent, monitor, local_workflow, mcp_task, …
+  type: string
+  description: string
+  status: 'running' | TaskEndStatus
+  toolUseId?: string
+  startedAt?: number
+  endedAt?: number
+  // Progress line while running, outcome once done.
+  summary?: string
+  lastTool?: string
+  tokens?: number
+  toolUses?: number
+}
 
 export interface SessionSummary {
   id: string
@@ -68,6 +92,8 @@ export interface SessionSummary {
   provider: Provider
   // Set for plugin providers, so lists can tag them without the catalog.
   providerLabel?: string
+  // Background tasks running in this session's process.
+  tasks?: number
 }
 
 export interface SessionState {
@@ -83,6 +109,9 @@ export interface SessionState {
   // auto-mode classifier.
   classifierModel: string | null
   live: boolean
+  // Background tasks of the current process, newest first. Empty when no
+  // process is running: its tasks ended with it.
+  tasks: BackgroundTask[]
 }
 
 export interface SessionSnapshot {
@@ -108,6 +137,12 @@ export interface ModelOption {
   more?: boolean
   resolved?: string
   efforts?: EffortLevel[]
+}
+
+export interface TaskOutput {
+  text: string
+  // Bytes written in total; text holds the end of it.
+  total: number
 }
 
 export interface McpServer {

@@ -1,8 +1,9 @@
-import { Bot, Brain, CheckCircle2, Circle, CircleDot, FilePen, FileText, Globe, ListTodo, Plug, Search, SquareTerminal, Wrench } from 'lucide-react'
+import { Bot, Brain, CheckCircle2, ChevronRight, Circle, CircleDot, FilePen, FileText, Globe, ListTodo, Plug, Search, SquareTerminal, Wrench } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { highlight } from '../components/Markdown.tsx'
 import { Sheet } from '../components/Sheet.tsx'
-import { Spinner } from '../components/bits.tsx'
+import { Spinner, toast } from '../components/bits.tsx'
+import { api } from '../lib/api.ts'
 import { openViewer } from '../lib/viewer.ts'
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { category, stepLabel, stepsSummary, type StepItem } from '../lib/steps.ts'
@@ -19,10 +20,20 @@ const ICONS: Record<string, ReactNode> = {
   other: <Wrench size={19} strokeWidth={1.6} />,
 }
 
-export function StepsSheet({ steps, sessionId, onClose }: { steps: StepItem[]; sessionId: string | null; onClose: () => void }) {
+interface Props {
+  steps: StepItem[]
+  sessionId: string | null
+  // The session's process is running, so a running call can be moved to the background.
+  live: boolean
+  onOpenTask: (taskId: string) => void
+  onClose: () => void
+}
+
+export function StepsSheet({ steps, sessionId, live, onOpenTask, onClose }: Props) {
   const [openId, setOpenId] = useState<string | null>(steps.length === 1 ? steps[0].id : null)
   const open = steps.find((s) => s.id === openId)
-  if (open) return <StepDetail step={open} sessionId={sessionId} onClose={onClose} onBack={steps.length > 1 ? () => setOpenId(null) : undefined} />
+  if (open)
+    return <StepDetail step={open} sessionId={sessionId} live={live} onOpenTask={onOpenTask} onClose={onClose} onBack={steps.length > 1 ? () => setOpenId(null) : undefined} />
   return (
     <Sheet title={stepsSummary(steps)} onClose={onClose} size="medium">
       <div className="timeline">
@@ -45,7 +56,7 @@ export function StepsSheet({ steps, sessionId, onClose }: { steps: StepItem[]; s
   )
 }
 
-function Field({ label, children, plain }: { label: string; children: ReactNode; plain?: boolean }) {
+export function Field({ label, children, plain }: { label: string; children: ReactNode; plain?: boolean }) {
   return (
     <>
       <div className="field-label">{label}</div>
@@ -71,8 +82,9 @@ function Diff({ oldText, newText }: { oldText: string; newText: string }) {
   )
 }
 
-function StepDetail({ step, sessionId, onClose, onBack }: { step: StepItem; sessionId: string | null; onClose: () => void; onBack?: () => void }) {
+function StepDetail({ step, sessionId, live, onOpenTask, onClose, onBack }: Omit<Props, 'steps'> & { step: StepItem; onBack?: () => void }) {
   const { toolRenderers } = usePlugins()
+  const [moving, setMoving] = useState(false)
   if (step.kind === 'thinking')
     return (
       <Sheet title="思考" onClose={onClose} onBack={onBack} size="medium">
@@ -81,7 +93,30 @@ function StepDetail({ step, sessionId, onClose, onBack }: { step: StepItem; sess
     )
   const i = step.input
   const out = step.result !== undefined ? step.result + (step.truncated ? '\n…（已截断）' : '') : step.status === 'running' ? null : ''
-  const output =
+  const movable = !step.taskId && step.status === 'running' && live && !!sessionId && ['Bash', 'Agent', 'Task'].includes(step.name)
+  const moveToBackground = async () => {
+    if (moving || !sessionId) return
+    setMoving(true)
+    try {
+      const { ok } = await api.backgroundTool(sessionId, step.id)
+      if (!ok) toast('暂时不能转入后台')
+    } catch (e: any) {
+      toast(e?.message ?? '操作失败')
+    } finally {
+      setMoving(false)
+    }
+  }
+  const output = step.taskId ? (
+    <button className="row-btn" style={{ marginTop: 16 }} onClick={() => onOpenTask(step.taskId!)}>
+      <span className="grow">查看后台任务</span>
+      <ChevronRight size={18} color="var(--text-3)" />
+    </button>
+  ) : movable ? (
+    <button className="row-btn" style={{ marginTop: 16 }} onClick={moveToBackground} disabled={moving}>
+      <span className="grow">转入后台</span>
+      {moving && <Spinner size={18} />}
+    </button>
+  ) :
     out === null ? null : step.images?.length ? (
       <>
         <div className="field-label">输出</div>

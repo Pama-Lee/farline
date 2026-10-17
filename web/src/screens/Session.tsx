@@ -1,4 +1,4 @@
-import { ArrowUp, ChevronLeft, ChevronRight, Copy, EyeOff, FileText, Mic, MoreHorizontal, PencilLine, Play, Plus, Puzzle, RefreshCw, Square, X } from 'lucide-react'
+import { ArrowUp, ChevronLeft, ChevronRight, Copy, EyeOff, FileText, ListChecks, Mic, MoreHorizontal, PencilLine, Play, Plus, Puzzle, RefreshCw, Square, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Catalog, EffortLevel, Item, ModelOption, PermissionMode, Provider, ProviderInfo, SessionState } from '../../../shared/types.ts'
 import { Markdown } from '../components/Markdown.tsx'
@@ -17,6 +17,8 @@ import { DirPicker } from '../sheets/DeviceSheet.tsx'
 import { ContextSheet } from '../sheets/ContextSheet.tsx'
 import { EFFORT_LABELS, ModelSheet, isCurrent } from '../sheets/ModelSheet.tsx'
 import { StepsSheet } from '../sheets/StepsSheet.tsx'
+import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
+import { collectTasks, type TaskView } from '../lib/tasks.ts'
 
 interface Props {
   id: string | null
@@ -27,6 +29,7 @@ interface Props {
 
 type ToolItem = Extract<Item, { kind: 'tool' }>
 type AskItem = Extract<Item, { kind: 'ask' }>
+type TaskItem = Extract<Item, { kind: 'task' }>
 
 const IMAGE_RE = /\.(png|jpe?g|gif|webp)$/i
 
@@ -45,6 +48,8 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const [steps, setSteps] = useState<StepItem[] | null>(null)
   const [stepsId, setStepsId] = useState<string | null>(null)
   const [menu, setMenu] = useState(false)
+  // Background tasks sheet, optionally opened on one task.
+  const [taskSheet, setTaskSheet] = useState<{ openId: string | null } | null>(null)
   const [pickDir, setPickDir] = useState(false)
   const desktop = useDesktop()
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -63,6 +68,8 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const busy = status === 'running' || status === 'requires_action'
 
   const blocks = useMemo(() => toBlocks(items), [items])
+  const tasks = useMemo(() => collectTasks(items, state?.tasks ?? []), [items, state?.tasks])
+  const runningTasks = tasks.filter((t) => t.status === 'running').length
   const pendingPerm = items.find((it): it is ToolItem => it.kind === 'tool' && it.permission?.status === 'pending')
 
   useEffect(() => {
@@ -201,6 +208,8 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                 />
               )
             if (b.type === 'ask') return <AskCard key={b.item.id} item={b.item} sessionId={id!} />
+            if (b.type === 'task')
+              return <TaskRow key={b.item.id} item={b.item} task={tasks.find((t) => t.id === b.item.taskId)} onOpen={() => setTaskSheet({ openId: b.item.taskId })} />
             return (
               <div key={b.item.id} className={`notice${b.item.level === 'error' ? ' error' : ''}`}>
                 {b.item.text}
@@ -242,6 +251,12 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
       </header>
 
       <div className="composer-wrap" ref={composerRef}>
+        {runningTasks > 0 && (
+          <button className="tasks-pill" onClick={() => setTaskSheet({ openId: null })}>
+            <Spinner size={14} />
+            {runningTasks} 个后台任务
+          </button>
+        )}
         {pendingPerm && id && <PermissionCard tool={pendingPerm} sessionId={id} />}
         {status === 'busy_elsewhere' ? (
           <div className="busy-note">
@@ -276,13 +291,31 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
         <StepsSheet
           steps={steps}
           sessionId={id}
+          live={!!state?.live}
+          onOpenTask={(taskId) => {
+            setSteps(null)
+            setStepsId(null)
+            setTaskSheet({ openId: taskId })
+          }}
           onClose={() => {
             setSteps(null)
             setStepsId(null)
           }}
         />
       )}
-      {menu && id && state && <SessionMenu state={state} onClose={() => setMenu(false)} onState={session.setState} />}
+      {taskSheet && id && <TasksSheet sessionId={id} tasks={tasks} live={!!state?.live} openId={taskSheet.openId} onClose={() => setTaskSheet(null)} />}
+      {menu && id && state && (
+        <SessionMenu
+          state={state}
+          taskCount={tasks.length}
+          onTasks={() => {
+            setMenu(false)
+            setTaskSheet({ openId: null })
+          }}
+          onClose={() => setMenu(false)}
+          onState={session.setState}
+        />
+      )}
       {pickDir && (
         <DirPicker
           start={cwd}
@@ -359,6 +392,22 @@ function StepsRow({ items, live, onOpen }: { items: StepItem[]; live: boolean; o
         </div>
       )}
     </>
+  )
+}
+
+function TaskRow({ item, task, onOpen }: { item: TaskItem; task?: TaskView; onOpen: () => void }) {
+  // No status: a monitor reporting an event rather than an ending.
+  const event = !item.status
+  const label = event ? '监控' : item.status === 'completed' ? '后台任务已完成' : item.status === 'failed' ? '后台任务失败' : '后台任务已停止'
+  const detail = event ? item.summary.replace(/^Monitor event:\s*/, '') : task?.description || item.summary
+  return (
+    <button className="steps-row task-row" onClick={onOpen}>
+      <TaskIcon task={{ type: task?.type ?? (event ? 'monitor' : 'task'), status: item.status ?? 'completed' }} size={16} />
+      <span className="lbl">
+        <span className={item.status === 'failed' ? 'err' : undefined}>{label}</span> {detail}
+      </span>
+      <ChevronRight size={17} strokeWidth={1.7} style={{ flex: 'none' }} />
+    </button>
   )
 }
 
@@ -789,7 +838,7 @@ function Composer(p: {
   )
 }
 
-function SessionMenu({ state, onClose, onState }: { state: SessionState; onClose: () => void; onState: (s: SessionState) => void }) {
+function SessionMenu({ state, taskCount, onTasks, onClose, onState }: { state: SessionState; taskCount: number; onTasks: () => void; onClose: () => void; onState: (s: SessionState) => void }) {
   const { sessionActions } = usePlugins()
   const [renaming, setRenaming] = useState(false)
   const [title, setTitle] = useState(state.title)
@@ -821,6 +870,13 @@ function SessionMenu({ state, onClose, onState }: { state: SessionState; onClose
         <PencilLine size={19} strokeWidth={1.6} />
         <span className="grow">重命名</span>
       </button>
+      {taskCount > 0 && (
+        <button className="row-btn" onClick={onTasks}>
+          <ListChecks size={19} strokeWidth={1.6} />
+          <span className="grow">后台任务</span>
+          <span className="value">{taskCount}</span>
+        </button>
+      )}
       <button
         className="row-btn"
         onClick={async () => {

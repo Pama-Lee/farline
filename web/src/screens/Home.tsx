@@ -87,6 +87,7 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
                 {basename(s.cwd) || device?.name}
                 <Laptop size={15} strokeWidth={1.7} color="var(--green)" style={{ opacity: s.status === 'idle' ? 0.55 : 1, flex: 'none' }} />
                 {s.providerLabel && <span className="tag">{s.providerLabel}</span>}
+                {!!s.tasks && <span className="tag">后台 {s.tasks}</span>}
               </div>
             </span>
           </button>

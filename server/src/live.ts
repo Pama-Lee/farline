@@ -2,7 +2,8 @@
 // running Claude Code process (streaming-input query); otherwise it is a
 // read-only projection of the persisted transcript.
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import {
   getSessionInfo,
   getSessionMessages,
@@ -15,14 +16,14 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import { runningElsewhere } from './activity.ts'
-import { config } from './config.ts'
+import { config, underFsRoot } from './config.ts'
 import { allProviders, emit, provider as pluginProvider, secretEnv } from './plugins/registry.ts'
 import type { SessionInfo } from './plugins/types.ts'
 import { notify } from './push.ts'
 import { save, state, type SessionMeta } from './store.ts'
 import { ItemLog } from './transcript.ts'
 import { loadUpload } from './uploads.ts'
-import type { Catalog, EffortLevel, Item, McpServer, ModelOption, Patch, PermissionMode, Provider, ProviderInfo, SessionSnapshot, SessionState, SessionStatus } from '../../shared/types.ts'
+import type { BackgroundTask, Catalog, EffortLevel, Item, McpServer, ModelOption, Patch, PermissionMode, Provider, ProviderInfo, SessionSnapshot, SessionState, SessionStatus, TaskOutput } from '../../shared/types.ts'
 
 const SNAPSHOT_ITEMS = 400
 
@@ -117,6 +118,47 @@ class Channel<T> implements AsyncIterable<T> {
 
 type Subscriber = (patch: Patch) => void
 
+interface TaskEntry extends BackgroundTask {
+  // Foreground tasks (a blocking Agent call) show as steps, not here.
+  background: boolean
+}
+
+const OUTPUT_TAIL = 16 * 1024
+
+// The end of a task's output file. Subagent files are transcripts (JSONL);
+// show what the agent said and which tools it used instead.
+function readTaskFile(file: string | undefined, taskId: string): TaskOutput {
+  if (!file || basename(file) !== `${taskId}.output` || !underFsRoot(file) || !existsSync(file)) return { text: '', total: 0 }
+  const total = statSync(file).size
+  const agent = /^a[0-9a-f]{8,}$/.test(taskId)
+  const size = Math.min(total, agent ? 4 * 1024 * 1024 : OUTPUT_TAIL)
+  const buf = Buffer.alloc(size)
+  const fd = openSync(file, 'r')
+  try {
+    readSync(fd, buf, 0, size, total - size)
+  } finally {
+    closeSync(fd)
+  }
+  const raw = buf.toString('utf8')
+  if (!agent) return { text: raw, total }
+  const lines: string[] = []
+  for (const line of raw.split('\n')) {
+    let m: any
+    try {
+      m = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (m.type !== 'assistant' || !Array.isArray(m.message?.content)) continue
+    for (const b of m.message.content) {
+      if (b.type === 'text' && b.text?.trim()) lines.push(b.text.trim())
+      else if (b.type === 'tool_use') lines.push(`→ ${b.name}${b.input?.description ? `  ${b.input.description}` : b.input?.file_path ? `  ${b.input.file_path}` : ''}`)
+    }
+  }
+  const text = lines.join('\n\n')
+  return { text: text.length > OUTPUT_TAIL ? text.slice(-OUTPUT_TAIL) : text, total }
+}
+
 interface Pending {
   kind: 'tool' | 'ask'
   itemId: string
@@ -143,6 +185,10 @@ export class SessionView {
   private pending = new Map<string, Pending>()
   private flushTimer?: NodeJS.Timeout
   private turns = 0
+  // Background tasks of the current process. bgRunning follows the CLI's
+  // level signal (background_tasks_changed), the rest its task_* events.
+  private tasks = new Map<string, TaskEntry>()
+  private bgRunning = new Set<string>()
 
   constructor(id: string, cwd: string, meta: SessionMeta, persisted: boolean) {
     this.id = id
@@ -172,7 +218,20 @@ export class SessionView {
       effort: this.meta.provider === 'claude' ? (this.meta.effort ?? 'xhigh') : null,
       classifierModel: classifierFor(this.meta) ?? null,
       live: this.live,
+      tasks: this.live ? this.visibleTasks() : [],
     }
+  }
+
+  // Closing the process would kill these.
+  get runningTasks() {
+    return this.bgRunning.size
+  }
+
+  private visibleTasks(): BackgroundTask[] {
+    return [...this.tasks.values()]
+      .filter((t) => t.background)
+      .map(({ background, ...t }) => (this.bgRunning.has(t.id) ? { ...t, status: 'running' as const } : t))
+      .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
   }
 
   info(): SessionInfo {
@@ -235,6 +294,10 @@ export class SessionView {
       pathToClaudeCodeExecutable: config.claudePath,
       permissionMode: this.meta.permissionMode,
       allowDangerouslySkipPermissions: true,
+      // Each background task gets its own stop button, so Stop only ends the
+      // turn and running background work carries on.
+      perTaskStopAffordance: true,
+      agentProgressSummaries: true,
       includePartialMessages: true,
       systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, snapshot: true },
       canUseTool: this.canUseTool,
@@ -245,8 +308,94 @@ export class SessionView {
     }
   }
 
+  private onTaskEvent(m: any) {
+    const t = this.tasks.get(m.task_id)
+    switch (m.subtype) {
+      case 'task_started':
+        if (m.skip_transcript || m.ambient) return
+        this.tasks.set(m.task_id, {
+          id: m.task_id,
+          type: m.task_type ?? 'task',
+          description: m.description ?? '',
+          status: 'running',
+          toolUseId: m.tool_use_id,
+          startedAt: Date.now(),
+          background: !!m.is_backgrounded || this.bgRunning.has(m.task_id),
+        })
+        break
+      case 'task_updated': {
+        if (!t) return
+        const p = m.patch ?? {}
+        if (p.description) t.description = p.description
+        if (p.is_backgrounded) t.background = true
+        if (p.status === 'completed' || p.status === 'failed' || p.status === 'killed') {
+          t.status = p.status === 'killed' ? 'stopped' : p.status
+          t.endedAt = p.end_time ?? Date.now()
+        }
+        if (p.error) t.summary = p.error
+        break
+      }
+      case 'task_progress':
+        if (!t) return
+        if (m.summary) t.summary = m.summary
+        if (m.last_tool_name) t.lastTool = m.last_tool_name
+        if (m.usage) Object.assign(t, { tokens: m.usage.total_tokens, toolUses: m.usage.tool_uses })
+        break
+      case 'task_notification':
+        if (m.skip_transcript || m.ambient) return
+        if (t) Object.assign(t, { status: m.status, summary: m.summary, endedAt: t.endedAt ?? Date.now() })
+        if (m.usage && t) Object.assign(t, { tokens: m.usage.total_tokens, toolUses: m.usage.tool_uses })
+        if (!t || t.background) this.log.applyTaskEnd(m)
+        break
+      case 'background_tasks_changed':
+        this.bgRunning = new Set()
+        for (const x of m.tasks ?? []) {
+          if (x.ambient) continue
+          this.bgRunning.add(x.task_id)
+          const e = this.tasks.get(x.task_id)
+          if (e) Object.assign(e, { background: true, description: x.description || e.description })
+          else this.tasks.set(x.task_id, { id: x.task_id, type: x.task_type, description: x.description, status: 'running', startedAt: Date.now(), background: true })
+        }
+        if (!this.bgRunning.size && this.respawn && this.status === 'idle') setTimeout(() => this.runningTasks === 0 && this.status === 'idle' && this.close(), 0)
+        break
+      default:
+        return
+    }
+    // Keep the newest few that have ended.
+    const ended = [...this.tasks.values()].filter((x) => x.status !== 'running' && !this.bgRunning.has(x.id))
+    for (const x of ended.slice(0, Math.max(0, ended.length - 30))) this.tasks.delete(x.id)
+    this.flushNow(true)
+  }
+
+  async stopTask(taskId: string) {
+    if (!this.q) throw new Error('会话进程已经结束')
+    await this.q.stopTask(taskId)
+  }
+
+  // Ctrl+B: let a long foreground command or subagent go on in the background.
+  async backgroundTool(toolUseId?: string): Promise<boolean> {
+    if (!this.q) return false
+    return this.q.backgroundTasks(toolUseId)
+  }
+
+  async taskOutput(taskId: string): Promise<TaskOutput> {
+    const t = this.tasks.get(taskId)
+    if (this.q && t?.type !== 'local_agent') {
+      try {
+        const r = await (this.q as any).getTaskOutput(taskId)
+        return { text: r.output ?? '', total: r.total_bytes ?? 0 }
+      } catch {}
+    }
+    // Ended, or from an earlier process: read the file the CLI wrote.
+    const known = this.log.taskFiles.get(taskId)
+    const sibling = this.log.taskFiles.values().next().value
+    return readTaskFile(known ?? (sibling ? join(dirname(sibling), `${taskId}.output`) : undefined), taskId)
+  }
+
   private start() {
     makeRoomForLive(this)
+    this.tasks.clear()
+    this.bgRunning.clear()
     this.input = new Channel<SDKUserMessage>()
     this.q = query({ prompt: this.input, options: this.options() })
     void this.consume(this.q)
@@ -267,6 +416,8 @@ export class SessionView {
               this.flushNow(true)
             } else if (m.subtype === 'session_state_changed') {
               this.setStatus(m.state === 'requires_action' ? 'requires_action' : m.state === 'running' ? 'running' : 'idle')
+            } else if (/^task_|^background_tasks_changed$/.test(m.subtype)) {
+              this.onTaskEvent(m)
             }
             break
           case 'stream_event':
@@ -294,6 +445,8 @@ export class SessionView {
       }
       // A replacement process may already be running; leave its state alone.
       if (!this.q) {
+        this.tasks.clear()
+        this.bgRunning.clear()
         this.rejectAllPending()
         this.log.dropDrafts()
         this.log.settleRunning()
@@ -306,9 +459,10 @@ export class SessionView {
 
   private onResult(m: any) {
     this.turns++
-    if (this.respawn) {
+    // Background tasks die with the process; wait for them to finish.
+    if (this.respawn && this.runningTasks === 0) {
       this.respawn = false
-      setTimeout(() => this.status === 'idle' && this.close(), 0)
+      setTimeout(() => this.status === 'idle' && this.runningTasks === 0 && this.close(), 0)
     }
     this.log.dropDrafts()
     this.log.settleRunning()
@@ -379,7 +533,7 @@ export class SessionView {
 
   respawnWhenIdle() {
     if (!this.q) return
-    if (this.status === 'idle') this.close()
+    if (this.status === 'idle' && this.runningTasks === 0) this.close()
     else this.respawn = true
   }
 
@@ -583,7 +737,7 @@ export function createView(cwd: string, meta: SessionMeta, title: string): Sessi
 function makeRoomForLive(except: SessionView) {
   const live = liveViews().filter((v) => v !== except)
   if (live.length < config.maxLive) return
-  const idle = live.filter((v) => v.status === 'idle' && v.subscribers.size === 0).sort((a, b) => a.lastActive - b.lastActive)
+  const idle = live.filter((v) => v.status === 'idle' && v.runningTasks === 0 && v.subscribers.size === 0).sort((a, b) => a.lastActive - b.lastActive)
   idle[0]?.close()
 }
 
@@ -619,7 +773,7 @@ setInterval(() => {
   const now = Date.now()
   for (const v of views.values()) {
     if (v.subscribers.size) continue
-    if (v.live && v.status === 'idle' && now - v.lastActive > config.idleCloseMs) v.close()
+    if (v.live && v.status === 'idle' && v.runningTasks === 0 && now - v.lastActive > config.idleCloseMs) v.close()
     else if (!v.live && now - v.lastActive > 10 * 60_000) views.delete(v.id)
   }
 }, 60_000).unref()

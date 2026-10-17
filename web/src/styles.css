@@ -1590,6 +1590,53 @@ textarea {
   outline: 0;
 }
 
+/* ---------- background tasks ---------- */
+
+.task-row svg:first-child {
+  flex: none;
+  margin-right: 3px;
+}
+
+.tasks-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 13px 0 11px;
+  margin: 0 0 8px 15px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--btn-shadow);
+  font-size: 13.5px;
+  color: var(--text);
+}
+
+.task-ic {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-2);
+}
+
+.task-ic.danger {
+  color: var(--red);
+}
+
+.option .one-line {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group + .task-stop,
+.task-stop + .field-label {
+  margin-top: 16px;
+}
+
+.task-stop .danger {
+  color: var(--red);
+}
+
 /* ---------- settings: plugins ---------- */
 
 a.option {

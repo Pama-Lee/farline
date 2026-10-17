@@ -1,8 +1,6 @@
 # Farline
 
-在手机和浏览器里用自己服务器上的 Claude Code。
-
-界面照 Claude App 的 Code 标签页做，后端通过 Claude Agent SDK 在你的服务器上起 Claude Code 会话。会话就是服务器上普通的 Claude Code 会话：终端里 `claude -r` 能接着用，终端里开的会话这里也能看到、能继续。
+自托管的编程 Agent 工作台。装在自己的服务器上，手机和电脑的浏览器都能用，多个会话同时跑。
 
 [English](#english)
 
@@ -12,15 +10,13 @@
 - 任意目录起会话，目录选择器可以浏览整台服务器
 - 工具调用、思考过程、图片、提问（AskUserQuestion）、权限确认
 - 切模型、思考强度、权限模式，中途可改
-- 两个提供商，底下都是 Claude Code：
-  - **Claude**：用服务器上已登录的 Claude Code 账号
-  - **DeepSeek**：走 DeepSeek 的 Anthropic 兼容接口，V4 Pro / Flash，100 万上下文；自动模式的判断模型也换成 DeepSeek
+- 模型可选 Anthropic 或 DeepSeek（V4 Pro / Flash，100 万上下文，自动模式的判断也由 DeepSeek 完成）
 - 手机装成 PWA；电脑上是侧栏 + 对话的布局，回车发送
 - 单密码登录
 
 ## 运行
 
-需要 Node 22.18 以上，以及在同一个用户下装好并登录过的 Claude Code（`~/.local/bin/claude`）。
+需要 Node 22.18 以上。Agent 运行时用的是 Claude Code CLI，要在同一个用户下装好（`~/.local/bin/claude`）。
 
 ```sh
 git clone https://github.com/Pama-Lee/farline && cd farline
@@ -43,7 +39,7 @@ Farline 能以运行它的用户身份读写文件、执行命令，等同于把
 | `FARLINE_DATA_DIR` | `~/.farline` | 密码哈希、Cookie 密钥、推送密钥、上传文件、偏好 |
 | `FARLINE_DEFAULT_CWD` | `~` | 新会话默认目录 |
 | `FARLINE_FS_ROOT` | `/` | 目录选择器和文件接口能访问的根 |
-| `FARLINE_CLAUDE_PATH` | `~/.local/bin/claude` | Claude Code 可执行文件 |
+| `FARLINE_CLAUDE_PATH` | `~/.local/bin/claude` | Agent 运行时的可执行文件 |
 | `FARLINE_DEVICE_NAME` | 主机名 | 界面上显示的设备名 |
 | `FARLINE_VAPID_SUBJECT` | `mailto:admin@example.com` | 推送发送方联系方式，换成你自己的 |
 | `FARLINE_MAX_LIVE` | `6` | 同时保持的会话进程数 |
@@ -63,22 +59,19 @@ Farline 能以运行它的用户身份读写文件、执行命令，等同于把
 
 ## English
 
-Use Claude Code on your own server from a phone or a browser.
-
-The UI follows the Code tab of the Claude app. The server starts Claude Code sessions through the Claude Agent SDK, so every session is an ordinary Claude Code session on that machine: `claude -r` picks it up in a terminal, and sessions started in a terminal show up here too.
+A self-hosted workspace for coding agents. Install it on your own server, use it from any browser on a phone or a computer, and run many sessions at once.
 
 - Parallel sessions, sorted by latest activity, push notification when one finishes
 - Start a session in any directory on the server
 - Tool calls, thinking, images, AskUserQuestion, permission prompts
 - Switch model, effort and permission mode mid-session
-- Two providers, both running Claude Code: your logged-in Claude account, or DeepSeek through its Anthropic-compatible API (V4 Pro / Flash, 1M context, DeepSeek also judges auto mode)
+- Models from Anthropic or DeepSeek (V4 Pro / Flash, 1M context, DeepSeek also judges auto mode)
 - Installable PWA on phones; sidebar layout on desktop
 
-Requires Node 22.18+ and Claude Code installed and logged in as the same user. Build with the commands above, set a password (12+ characters), and serve it behind HTTPS (see `deploy/`). Configuration is the environment variables in the table above.
+Requires Node 22.18+. The agent runtime is the Claude Code CLI, installed for the same user. Build with the commands above, set a password (12+ characters), and serve it behind HTTPS (see `deploy/`). Configuration is the environment variables in the table above.
 
 Farline can read, write and run anything the user running it can. Treat the password like SSH access.
 
-Not affiliated with Anthropic.
 
 ## License
 

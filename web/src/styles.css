@@ -835,6 +835,84 @@ textarea {
   color: var(--red);
 }
 
+.steps-row .chev {
+  flex: none;
+  transition: transform 0.15s;
+}
+
+.steps-row.open .chev {
+  transform: rotate(90deg);
+}
+
+/* tool calls opened in the conversation */
+
+.inline-steps {
+  margin: -6px 0 14px;
+  border-left: 1.5px solid var(--line);
+  padding-left: 14px;
+}
+
+.inline-steps.single {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.inline-steps .field-label:first-child {
+  margin-top: 0;
+}
+
+.is-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 5px 0;
+  text-align: left;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-2);
+}
+
+.is-head .ic {
+  flex: none;
+  width: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.is-head .l1 {
+  flex: none;
+  color: var(--text);
+}
+
+.is-head.error .l1 {
+  color: var(--red);
+}
+
+.is-head .l2 {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-3);
+}
+
+.is-head .chev {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-3);
+  transition: transform 0.15s;
+}
+
+.is-item.open .chev {
+  transform: rotate(90deg);
+}
+
+.is-body {
+  padding: 2px 0 10px 26px;
+}
+
 .thumbs {
   display: flex;
   gap: 6px;

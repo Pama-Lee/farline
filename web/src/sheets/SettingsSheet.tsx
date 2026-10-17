@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Check, ChevronRight, LogOut, Palette, Puzzle } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, ChevronRight, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
@@ -6,8 +6,15 @@ import { Spinner, toast } from '../components/bits.tsx'
 import { CATALOG_CHANGED, api } from '../lib/api.ts'
 import { currentPushSubscription, disablePush, enablePush, isStandalone, pushSupported } from '../lib/device.ts'
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
+import { setStepsView, useStepsView, type StepsView } from '../lib/prefs.ts'
 
-type View = { name: 'main' } | { name: 'plugins' } | { name: 'skins' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+type View = { name: 'main' } | { name: 'plugins' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+
+const STEPS_VIEWS: { id: StepsView; label: string }[] = [
+  { id: 'auto', label: '自动' },
+  { id: 'sheet', label: '弹窗' },
+  { id: 'inline', label: '在对话里展开' },
+]
 
 const SOURCE: Record<PluginInfo['source'], string> = { builtin: '内置', local: '本地', npm: 'npm' }
 
@@ -21,6 +28,7 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
   const [plugins, setPlugins] = useState<PluginInfo[] | null>(null)
   const [statuses, setStatuses] = useState<Record<string, PluginStatus>>({})
   const { settingsPanels } = usePlugins()
+  const stepsView = useStepsView()
 
   const loadStatus = useCallback((p: PluginInfo) => {
     if (p.state !== 'active' || !p.hasStatus) return
@@ -113,6 +121,20 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       </Sheet>
     )
 
+  if (view.name === 'steps')
+    return (
+      <Sheet title="工具调用" onClose={onClose} onBack={() => setView({ name: 'main' })}>
+        <div className="group">
+          {STEPS_VIEWS.map((o) => (
+            <button className="option" key={o.id} onClick={() => setStepsView(o.id)}>
+              <span className="grow">{o.label}</span>
+              {stepsView === o.id && <Check size={20} strokeWidth={2.2} className="check" />}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    )
+
   if (view.name === 'plugins')
     return (
       <Sheet title="插件" onClose={onClose} onBack={() => setView({ name: 'main' })}>
@@ -173,6 +195,11 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
           <span className="value">{activeSkin?.name ?? '默认'}</span>
         </button>
       )}
+      <button className="row-btn" onClick={() => setView({ name: 'steps' })}>
+        <ListTree size={19} strokeWidth={1.6} />
+        <span className="grow">工具调用</span>
+        <span className="value">{STEPS_VIEWS.find((o) => o.id === stepsView)!.label}</span>
+      </button>
       <button className="row-btn" onClick={() => setView({ name: 'plugins' })}>
         <Puzzle size={19} strokeWidth={1.6} />
         <span className="grow">插件</span>

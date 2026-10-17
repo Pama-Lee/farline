@@ -18,7 +18,8 @@ import { DirPicker } from '../sheets/DeviceSheet.tsx'
 import { ContextSheet } from '../sheets/ContextSheet.tsx'
 import { EFFORT_LABELS, ModelSheet, isCurrent } from '../sheets/ModelSheet.tsx'
 import { ModelMenu, wantsMenuPicker } from '../sheets/ModelMenu.tsx'
-import { StepsSheet } from '../sheets/StepsSheet.tsx'
+import { InlineSteps, StepsSheet } from '../sheets/StepsSheet.tsx'
+import { useInlineSteps } from '../lib/prefs.ts'
 import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
 import { collectTasks, type TaskView } from '../lib/tasks.ts'
 
@@ -205,6 +206,9 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                     key={b.id}
                     items={b.items}
                     live={busy}
+                    sessionId={id}
+                    processLive={!!state?.live}
+                    onOpenTask={(taskId) => setTaskSheet({ openId: taskId })}
                     onOpen={() => {
                       setSteps(b.items)
                       setStepsId(b.id)
@@ -357,7 +361,10 @@ function prettyModel(model: string) {
   return model
 }
 
-function StepsRow({ items, live, onOpen }: { items: StepItem[]; live: boolean; onOpen: () => void }) {
+function StepsRow(p: { items: StepItem[]; live: boolean; sessionId: string | null; processLive: boolean; onOpenTask: (taskId: string) => void; onOpen: () => void }) {
+  const { items, live } = p
+  const inline = useInlineSteps()
+  const [expanded, setExpanded] = useState(false)
   const run = live ? runningStep(items) : undefined
   // Prefer the image kept in the transcript; the file itself may be gone.
   const images: ViewerImage[] = items.flatMap((s) => {
@@ -382,11 +389,12 @@ function StepsRow({ items, live, onOpen }: { items: StepItem[]; live: boolean; o
   } else label = stepsSummary(items)
   return (
     <>
-      <button className="steps-row" onClick={onOpen}>
+      <button className={`steps-row${inline && expanded ? ' open' : ''}`} onClick={inline ? () => setExpanded((x) => !x) : p.onOpen}>
         {run && <Spinner size={16} />}
         <span className="lbl">{label}</span>
-        <ChevronRight size={17} strokeWidth={1.7} style={{ flex: 'none' }} />
+        <ChevronRight size={17} strokeWidth={1.7} className="chev" />
       </button>
+      {inline && expanded && <InlineSteps steps={items} sessionId={p.sessionId} live={p.processLive} onOpenTask={p.onOpenTask} onClose={() => undefined} />}
       {images.length > 0 && (
         <div className="thumbs">
           {images.map((im, i) => (
@@ -785,6 +793,10 @@ function Composer(p: {
         rows={1}
         value={text}
         autoFocus={p.autoFocus}
+        spellCheck={false}
+        data-gramm="false"
+        data-gramm_editor="false"
+        data-enable-grammarly="false"
         placeholder={p.sessionId ? '回复' : '要做什么'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {

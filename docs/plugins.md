@@ -6,6 +6,7 @@
 - **通知渠道**：会话完成或需要你处理时，除浏览器推送外再发到别处
 - **会话钩子**：会话创建、发消息、一轮结束、等待确认时执行自己的逻辑
 - **界面扩展**：工具结果的显示、会话菜单里的操作、插件自己的设置面板
+- **皮肤**：换掉整个界面的样子，在「设置 → 外观」里切换
 
 DeepSeek、兼容接口、企业微信这三个内置功能本身就是插件，代码在 [`plugins/`](../plugins)，可以直接当样板看。[`examples/plugins/hello`](../examples/plugins/hello) 用到了钩子、HTTP 接口和全部三种界面扩展，不用构建，复制过去就能跑。
 
@@ -52,7 +53,9 @@ DeepSeek、兼容接口、企业微信这三个内置功能本身就是插件，
 | `apiVersion` | 插件接口版本，目前是 `1`；不匹配的插件不会启用 |
 | `server` | 服务端入口，可省略 |
 | `web` | 前端入口，可省略 |
-| `enabledByDefault` | 第一次发现时是否启用，默认 `true` |
+| `styles` | 加到页面上的样式表，可省略 |
+| `skin` | 为 `true` 时是皮肤，见下文 |
+| `enabledByDefault` | 第一次发现时是否启用，默认 `true`；皮肤默认 `false` |
 
 服务端入口可以是 `.js`，也可以是 `.ts`（Node 自带类型擦除，只支持可擦除的语法）。装在 `node_modules` 里的包只能用 `.js`。
 
@@ -240,6 +243,22 @@ npx esbuild src/web.tsx --bundle --format=esm --jsx=automatic --external:react -
 每个 `register*` 返回一个撤销函数。插件组件出错时只影响它自己：工具显示退回默认样式，其他位置显示一行错误。
 
 样式可以直接用页面的类名：`group`、`option`、`row-btn`、`field-label`、`field-box`、`hint`。
+
+## 皮肤
+
+皮肤是只带样式表的插件：
+
+```json
+{
+  "name": "farline-skin-paper",
+  "version": "1.0.0",
+  "farline": { "id": "paper", "name": "纸", "apiVersion": 1, "skin": true, "styles": "./skin.css" }
+}
+```
+
+界面的样式分两层：底层 `web/src/styles.css` 管布局和一套基础样子，Farline 默认的样子是叠在上面的 `web/src/theme.css`。启用皮肤时页面根元素带上 `data-skin="<id>"`，默认那一层整个失效，皮肤的样式表接在底层后面加载。所以皮肤是在底层上改，不用去抵消默认主题；颜色、圆角这类先改底层 `:root` 里的变量（`--bg`、`--surface`、`--text`、`--line` 等），不够再写具体规则。
+
+同时只能启用一个皮肤，启用一个会自动停用别的。皮肤也可以同时带 `server` / `web` 入口。
 
 ## 内置插件
 

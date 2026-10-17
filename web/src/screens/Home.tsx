@@ -21,7 +21,7 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
   const deviceCwd = cwd ?? filter ?? device?.defaultCwd ?? ''
 
   return (
-    <div className="screen">
+    <div className="screen home">
 
 
       <div

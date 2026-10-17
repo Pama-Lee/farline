@@ -2,7 +2,8 @@
 //
 // A plugin is a directory whose package.json has a "farline" field:
 //   { "id": "wecom", "name": "企业微信", "apiVersion": 1,
-//     "server": "./server.js", "web": "./web.js", "enabledByDefault": false }
+//     "server": "./server.js", "web": "./web.js", "styles": "./style.css",
+//     "skin": false, "enabledByDefault": false }
 // Looked up in the built-in plugins directory, <dataDir>/plugins/*, and npm
 // packages installed under <dataDir>/plugins/node_modules. A user plugin with
 // the same id as a built-in one replaces it.
@@ -28,6 +29,8 @@ interface Manifest {
   apiVersion: number
   server?: string
   web?: string
+  styles?: string
+  skin?: boolean
   enabledByDefault?: boolean
 }
 
@@ -87,7 +90,18 @@ function readManifest(dir: string): Manifest | undefined {
     const f = pkg.farline
     if (!f || typeof f !== 'object') return undefined
     if (!ID_RE.test(f.id ?? '')) throw new Error(`invalid plugin id "${f.id}"`)
-    return { id: f.id, name: f.name || f.id, version: pkg.version ?? '0.0.0', apiVersion: f.apiVersion ?? 1, server: f.server, web: f.web, enabledByDefault: f.enabledByDefault }
+    return {
+      id: f.id,
+      name: f.name || f.id,
+      version: pkg.version ?? '0.0.0',
+      apiVersion: f.apiVersion ?? 1,
+      server: f.server,
+      web: f.web,
+      styles: f.styles,
+      skin: f.skin === true,
+      // A newly installed skin should not take over the look by itself.
+      enabledByDefault: f.enabledByDefault ?? (f.skin === true ? false : undefined),
+    }
   } catch (e: any) {
     console.error(`[plugins] skipping ${dir}: ${e?.message ?? e}`)
     return undefined
@@ -299,9 +313,9 @@ export async function loadPlugins() {
 
 // ---- management API ----
 
-function webUrl(p: Plugin): string | undefined {
-  if (!p.manifest.web) return undefined
-  const file = resolve(p.root, p.manifest.web)
+function assetUrl(p: Plugin, entry: string | undefined): string | undefined {
+  if (!entry) return undefined
+  const file = resolve(p.root, entry)
   if (!file.startsWith(p.root + sep) || !existsSync(file)) return undefined
   const v = `${p.manifest.version}-${Math.round(statSync(file).mtimeMs)}`
   return `/api/plugin-assets/${p.manifest.id}/${file.slice(p.root.length + 1).split(sep).map(encodeURIComponent).join('/')}?v=${v}`
@@ -316,7 +330,9 @@ export function pluginInfo(p: Plugin): PluginInfo {
     enabled: isEnabled(p),
     state: p.state,
     error: p.error,
-    web: p.state === 'active' ? webUrl(p) : undefined,
+    web: p.state === 'active' ? assetUrl(p, p.manifest.web) : undefined,
+    styles: p.state === 'active' ? assetUrl(p, p.manifest.styles) : undefined,
+    ...(p.manifest.skin ? { skin: true } : {}),
     settings: fieldViews(p),
     links: p.def?.links ?? [],
     hasStatus: !!p.def?.status,
@@ -334,6 +350,14 @@ export function getPlugin(id: string): Plugin | undefined {
 }
 
 export async function setEnabled(p: Plugin, enabled: boolean) {
+  // One skin at a time.
+  if (enabled && p.manifest.skin) {
+    for (const other of plugins.values()) {
+      if (other === p || !other.manifest.skin || !isEnabled(other)) continue
+      saved[other.manifest.id] = { ...saved[other.manifest.id], enabled: false }
+      if (other.state !== 'disabled') await deactivate(other)
+    }
+  }
   saved[p.manifest.id] = { ...saved[p.manifest.id], enabled }
   writeState()
   if (enabled && p.state !== 'active') await activate(p)

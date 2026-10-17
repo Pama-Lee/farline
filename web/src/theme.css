@@ -1,0 +1,504 @@
+/*
+ * Farline's own look, layered over the base styles. Black and white, one
+ * accent per screen at most, square-ish corners and no floating shadows
+ * (after Uber Base). Every rule is scoped to :root:not([data-skin]): a skin
+ * plugin sets data-skin on <html>, which turns this whole layer off.
+ */
+
+:root:not([data-skin]) {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --fill: #f3f3f3;
+  --tile: #f3f3f3;
+  --row-fill: #f6f6f6;
+  --text: #000000;
+  --text-2: #5e5e5e;
+  --text-3: #a6a6a6;
+  --line: #ebebeb;
+  --blue: #000000;
+  --orange: #000000;
+  --claude: #000000;
+  --black: #000000;
+  --green: #1a9e55;
+  --red: #c8372d;
+  --amber: #e09b00;
+  --btn-shadow: none;
+  --radius: 8px;
+}
+
+/* ---------- bars and buttons ---------- */
+
+:root:not([data-skin]) .topbar {
+  grid-template-columns: auto 1fr auto;
+  height: var(--head-h);
+}
+
+:root:not([data-skin]) .topbar::before {
+  background: var(--bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+:root:not([data-skin]) .topbar .title {
+  text-align: left;
+  max-width: none;
+}
+
+:root:not([data-skin]) .topbar .title h1 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+:root:not([data-skin]) .circle-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  background: transparent;
+  box-shadow: none;
+}
+
+:root:not([data-skin]) .pill-btns {
+  height: 40px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root:not([data-skin]) .pill-btns button {
+  width: 40px;
+  border-radius: var(--radius);
+}
+
+:root:not([data-skin]) .circle-btn:active,
+:root:not([data-skin]) .pill-btns button:active {
+  transform: none;
+  background: var(--fill);
+}
+
+:root:not([data-skin]) .black-pill {
+  border-radius: var(--radius);
+  background: var(--black);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+:root:not([data-skin]) .black-pill:active,
+:root:not([data-skin]) .round:active {
+  transform: none;
+  opacity: 0.85;
+}
+
+/* ---------- home: big title on the left, a plain list, one bottom button ---------- */
+
+:root:not([data-skin]) .home .topbar {
+  grid-template-columns: 1fr auto auto;
+  padding: var(--safe-top) 12px 0 20px;
+}
+
+:root:not([data-skin]) .home .topbar .title {
+  order: -1;
+}
+
+:root:not([data-skin]) .home .topbar .left {
+  order: 1;
+}
+
+:root:not([data-skin]) .home .topbar .right {
+  order: 2;
+}
+
+:root:not([data-skin]) .home-title {
+  font-size: 28px !important;
+  line-height: 34px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+}
+
+:root:not([data-skin]) .section-label {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 20px;
+}
+
+:root:not([data-skin]) .device-chip {
+  margin: 12px 20px 0;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--fill);
+  font-weight: 500;
+}
+
+:root:not([data-skin]) .device-icon .dot {
+  border-color: var(--fill);
+}
+
+:root:not([data-skin]) .session-row {
+  position: relative;
+  grid-template-columns: 8px 1fr;
+  column-gap: 14px;
+  padding: 13px 20px;
+}
+
+:root:not([data-skin]) .session-row + .session-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 42px;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
+
+:root:not([data-skin]) .session-row:active {
+  background: var(--row-fill);
+}
+
+:root:not([data-skin]) .session-row .t {
+  font-weight: 500;
+}
+
+:root:not([data-skin]) .session-row .s {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* The device is in the header already. */
+:root:not([data-skin]) .session-row .s svg {
+  display: none;
+}
+
+:root:not([data-skin]) .idle-ring {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  background: #d6d6d6;
+}
+
+:root:not([data-skin]) .sb-row .glyph .idle-ring {
+  width: 7px;
+  height: 7px;
+}
+
+:root:not([data-skin]) .action-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--amber);
+}
+
+:root:not([data-skin]) .tag {
+  border-radius: 4px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+:root:not([data-skin]) .fab-row {
+  bottom: 0;
+  gap: 10px;
+  padding: 10px 20px calc(var(--safe-bottom) + 8px);
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  pointer-events: auto;
+}
+
+:root:not([data-skin]) .fab-search {
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+:root:not([data-skin]) .fab-row .black-pill {
+  flex: 1;
+  height: 50px;
+  justify-content: center;
+  font-size: 16px;
+}
+
+:root:not([data-skin]) .search-bar {
+  margin: 0 20px 8px;
+  border-radius: var(--radius);
+  background: var(--fill);
+  box-shadow: none;
+}
+
+/* ---------- sheets: title on the left, close on the right ---------- */
+
+:root:not([data-skin]) .sheet {
+  background: var(--surface);
+}
+
+:root:not([data-skin]) .sheet-head {
+  display: flex;
+  gap: 4px;
+  padding: 16px 12px 6px 20px;
+}
+
+:root:not([data-skin]) .sheet-head h2 {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+}
+
+:root:not([data-skin]) .sheet-head .circle-btn {
+  background: transparent;
+}
+
+:root:not([data-skin]) .sheet-head .circle-btn[aria-label='返回'] {
+  margin-left: -10px;
+}
+
+:root:not([data-skin]) .sheet-head .circle-btn[aria-label='关闭'] {
+  order: 3;
+}
+
+:root:not([data-skin]) .sheet-body {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+:root:not([data-skin]) .sheet-foot .black-pill {
+  border-radius: var(--radius);
+  background: var(--black);
+}
+
+@media (max-width: 899px) {
+  :root:not([data-skin]) .sheet {
+    left: 0;
+    right: 0;
+    bottom: var(--kb);
+    border-radius: 16px 16px 0 0;
+  }
+
+  :root:not([data-skin]) .sheet .grabber {
+    background: #d6d6d6;
+  }
+}
+
+@media (min-width: 900px) {
+  :root:not([data-skin]) .sheet {
+    border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.16);
+  }
+}
+
+:root:not([data-skin]) .group,
+:root:not([data-skin]) .card {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+:root:not([data-skin]) .row-btn {
+  border-radius: var(--radius);
+  background: var(--fill);
+}
+
+:root:not([data-skin]) .row-btn + .row-btn {
+  margin-top: 10px;
+}
+
+:root:not([data-skin]) .group + .group,
+:root:not([data-skin]) .group + .row-btn,
+:root:not([data-skin]) .row-btn + .group {
+  margin-top: 12px;
+}
+
+:root:not([data-skin]) .field-box,
+:root:not([data-skin]) .text-input,
+:root:not([data-skin]) .path-input,
+:root:not([data-skin]) .ask-card textarea {
+  border-radius: var(--radius);
+}
+
+:root:not([data-skin]) .switch {
+  background: #e2e2e2;
+}
+
+:root:not([data-skin]) .switch.on {
+  background: var(--black);
+}
+
+:root:not([data-skin]) .segmented {
+  border-radius: var(--radius);
+  background: var(--fill);
+}
+
+:root:not([data-skin]) .segmented button {
+  border-radius: 6px;
+}
+
+:root:not([data-skin]) .chip,
+:root:not([data-skin]) .btn {
+  border-radius: var(--radius);
+}
+
+:root:not([data-skin]) .toast {
+  border-radius: var(--radius);
+}
+
+/* ---------- conversation ---------- */
+
+:root:not([data-skin]) .bubble {
+  background: var(--black);
+  color: #fff;
+  border-radius: 12px 12px 4px 12px;
+  font-size: 16px;
+}
+
+:root:not([data-skin]) .msg-images img,
+:root:not([data-skin]) .thumbs img,
+:root:not([data-skin]) .file-chip,
+:root:not([data-skin]) .attach img,
+:root:not([data-skin]) .attach .file {
+  border-radius: var(--radius);
+}
+
+:root:not([data-skin]) .md {
+  font-size: 16px;
+  line-height: 26px;
+}
+
+:root:not([data-skin]) .md h1,
+:root:not([data-skin]) .md h2,
+:root:not([data-skin]) .md h3,
+:root:not([data-skin]) .md h4 {
+  font-weight: 700;
+}
+
+:root:not([data-skin]) .md code {
+  background: var(--fill);
+  border-radius: 4px;
+}
+
+:root:not([data-skin]) .md pre {
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--row-fill);
+}
+
+:root:not([data-skin]) .md pre code {
+  background: none;
+}
+
+:root:not([data-skin]) .notice.error {
+  border-radius: var(--radius);
+  background: #fbecea;
+}
+
+:root:not([data-skin]) .ask-card,
+:root:not([data-skin]) .perm-card {
+  border-radius: 12px;
+}
+
+:root:not([data-skin]) .perm-card {
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+}
+
+:root:not([data-skin]) .composer-wrap {
+  background: linear-gradient(rgba(255, 255, 255, 0), var(--bg) 22px);
+}
+
+:root:not([data-skin]) .composer {
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid #e2e2e2;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+}
+
+:root:not([data-skin]) .round {
+  border-radius: var(--radius);
+}
+
+:root:not([data-skin]) .round.send[disabled] {
+  background: #e2e2e2;
+}
+
+:root:not([data-skin]) .model-pill {
+  border-radius: var(--radius);
+  font-weight: 500;
+}
+
+:root:not([data-skin]) .busy-note,
+:root:not([data-skin]) .tasks-pill {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+/* ---------- desktop sidebar ---------- */
+
+:root:not([data-skin]) .sidebar {
+  background: var(--surface);
+}
+
+:root:not([data-skin]) .sb-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+:root:not([data-skin]) .sb-new {
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+:root:not([data-skin]) .sb-search {
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--fill);
+}
+
+:root:not([data-skin]) .sb-device,
+:root:not([data-skin]) .sb-row {
+  border-radius: 6px;
+}
+
+:root:not([data-skin]) .sb-device .dot {
+  border-color: var(--surface);
+}
+
+:root:not([data-skin]) .sb-label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+:root:not([data-skin]) .sb-row.active {
+  background: var(--fill);
+}
+
+:root:not([data-skin]) .sb-row .s {
+  color: var(--text-2);
+}
+
+:root:not([data-skin]) .sb-row .s svg {
+  display: none;
+}
+
+/* ---------- login ---------- */
+
+:root:not([data-skin]) .login img {
+  border-radius: 14px;
+}
+
+:root:not([data-skin]) .login-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+:root:not([data-skin]) .login input {
+  border-radius: var(--radius);
+  background: var(--fill);
+  border-color: transparent;
+}

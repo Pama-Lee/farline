@@ -1,4 +1,4 @@
-/* Measured from Claude iOS screenshots on a 402pt-wide phone. */
+/* Base layer: layout and behaviour, plus the original look that skins build on. Farline's own look is theme.css on top. */
 :root {
   --bg: #f9f9f7;
   --surface: #ffffff;

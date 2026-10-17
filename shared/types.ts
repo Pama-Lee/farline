@@ -249,6 +249,10 @@ export interface PluginInfo {
   error?: string
   // URL of the browser entry, versioned for caching.
   web?: string
+  // Stylesheet the plugin adds to the page, versioned like web.
+  styles?: string
+  // A skin restyles the whole app; only one is on at a time.
+  skin?: boolean
   settings: SettingFieldView[]
   links: { label: string; url: string }[]
   hasStatus: boolean

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Check, ChevronRight, LogOut, Puzzle } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, ChevronRight, LogOut, Palette, Puzzle } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
@@ -7,7 +7,7 @@ import { CATALOG_CHANGED, api } from '../lib/api.ts'
 import { currentPushSubscription, disablePush, enablePush, isStandalone, pushSupported } from '../lib/device.ts'
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 
-type View = { name: 'main' } | { name: 'plugins' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+type View = { name: 'main' } | { name: 'plugins' } | { name: 'skins' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
 
 const SOURCE: Record<PluginInfo['source'], string> = { builtin: '内置', local: '本地', npm: 'npm' }
 
@@ -85,6 +85,34 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       )
   }
 
+  const skins = (plugins ?? []).filter((p) => p.skin)
+  const activeSkin = skins.find((p) => p.enabled && p.state === 'active')
+
+  const pickSkin = async (id: string | null) => {
+    try {
+      if (id) await api.setPluginEnabled(id, true)
+      else if (activeSkin) await api.setPluginEnabled(activeSkin.id, false)
+      setPlugins(await api.plugins())
+      window.dispatchEvent(new Event(CATALOG_CHANGED))
+    } catch (e: any) {
+      toast(e?.message ?? '操作失败')
+    }
+  }
+
+  if (view.name === 'skins')
+    return (
+      <Sheet title="外观" onClose={onClose} onBack={() => setView({ name: 'main' })}>
+        <div className="group">
+          {[{ id: null, name: '默认' }, ...skins].map((k) => (
+            <button className="option" key={k.id ?? 'default'} onClick={() => void pickSkin(k.id)}>
+              <span className="grow">{k.name}</span>
+              {(activeSkin?.id ?? null) === k.id && <Check size={20} strokeWidth={2.2} className="check" />}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    )
+
   if (view.name === 'plugins')
     return (
       <Sheet title="插件" onClose={onClose} onBack={() => setView({ name: 'main' })}>
@@ -137,6 +165,13 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
             )
           })}
         </div>
+      )}
+      {skins.length > 0 && (
+        <button className="row-btn" onClick={() => setView({ name: 'skins' })}>
+          <Palette size={19} strokeWidth={1.6} />
+          <span className="grow">外观</span>
+          <span className="value">{activeSkin?.name ?? '默认'}</span>
+        </button>
       )}
       <button className="row-btn" onClick={() => setView({ name: 'plugins' })}>
         <Puzzle size={19} strokeWidth={1.6} />

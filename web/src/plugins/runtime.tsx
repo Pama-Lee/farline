@@ -118,8 +118,47 @@ async function load(id: string, url: string) {
   }
 }
 
+// ---- stylesheets (skins are plugins with one) ----
+
+interface PluginStyle {
+  id: string
+  href: string
+  skin: boolean
+}
+
+const STYLES_KEY = 'farline.styles'
+
+function applyStyles(want: PluginStyle[]) {
+  for (const el of document.querySelectorAll<HTMLLinkElement>('link[data-plugin]')) {
+    if (!want.some((w) => w.id === el.dataset.plugin && w.href === el.getAttribute('href'))) el.remove()
+  }
+  // After the app's own stylesheet, so plugin rules win.
+  for (const w of want) {
+    if (document.querySelector(`link[data-plugin="${CSS.escape(w.id)}"]`)) continue
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = w.href
+    link.dataset.plugin = w.id
+    document.head.appendChild(link)
+  }
+  const skin = want.find((w) => w.skin)?.id
+  if (skin) document.documentElement.dataset.skin = skin
+  else delete document.documentElement.dataset.skin
+}
+
+// Before the first render: the last known skin, so the page does not flash
+// the default look while the plugin list loads.
+export function preloadStyles() {
+  try {
+    applyStyles(JSON.parse(localStorage.getItem(STYLES_KEY) ?? '[]'))
+  } catch {}
+}
+
 // Bring loaded browser code in line with the server's plugin list.
 export async function syncPlugins(list: PluginInfo[]) {
+  const styles = list.filter((p) => p.styles).map((p) => ({ id: p.id, href: p.styles!, skin: !!p.skin }))
+  applyStyles(styles)
+  localStorage.setItem(STYLES_KEY, JSON.stringify(styles))
   for (const [id, l] of loaded) if (!list.some((p) => p.id === id && p.web === l.url)) unload(id)
   await Promise.all(list.filter((p) => p.web && !loaded.has(p.id)).map((p) => load(p.id, p.web!)))
 }

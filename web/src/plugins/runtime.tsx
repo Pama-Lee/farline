@@ -130,37 +130,76 @@ interface PluginStyle {
 
 const STYLES_KEY = 'farline.styles'
 
-function applyStyles(want: PluginStyle[]) {
-  for (const el of document.querySelectorAll<HTMLLinkElement>('link[data-plugin]')) {
-    if (!want.some((w) => w.id === el.dataset.plugin && w.href === el.getAttribute('href'))) el.remove()
-  }
-  // After the app's own stylesheet, so plugin rules win.
+function linkLoaded(link: HTMLLinkElement) {
+  return new Promise<void>((resolve) => {
+    if (link.sheet) return resolve()
+    const done = () => resolve()
+    link.addEventListener('load', done, { once: true })
+    link.addEventListener('error', done, { once: true })
+    setTimeout(done, 8000)
+  })
+}
+
+// New stylesheets load first; only then do the old ones go and the skin
+// switch, so the page goes straight from one look to the other.
+async function applyStyles(want: PluginStyle[]) {
+  const added: HTMLLinkElement[] = []
   for (const w of want) {
-    if (document.querySelector(`link[data-plugin="${CSS.escape(w.id)}"]`)) continue
+    if (document.querySelector(`link[data-plugin="${CSS.escape(w.id)}"][href="${CSS.escape(w.href)}"]`)) continue
     const link = document.createElement('link')
     link.rel = 'stylesheet'
     link.href = w.href
     link.dataset.plugin = w.id
+    link.dataset.pending = ''
+    // Not applied until it is ready.
+    link.media = 'not all'
     document.head.appendChild(link)
+    added.push(link)
   }
-  const skin = want.find((w) => w.skin)?.id
-  if (skin) document.documentElement.dataset.skin = skin
-  else delete document.documentElement.dataset.skin
+  await Promise.all(added.map(linkLoaded))
+  const swap = () => {
+    for (const el of document.querySelectorAll<HTMLLinkElement>('link[data-plugin]')) {
+      if (!want.some((w) => w.id === el.dataset.plugin && w.href === el.getAttribute('href'))) el.remove()
+    }
+    for (const link of added) {
+      link.media = 'all'
+      delete link.dataset.pending
+    }
+    const skin = want.find((w) => w.skin)?.id
+    if (skin) document.documentElement.dataset.skin = skin
+    else delete document.documentElement.dataset.skin
+  }
+  const current = document.documentElement.dataset.skin
+  const next = want.find((w) => w.skin)?.id
+  const doc = document as Document & { startViewTransition?: (fn: () => void) => { finished: Promise<void> } }
+  // A short cross-fade when the look changes.
+  if (current !== next && doc.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) await doc.startViewTransition(swap).finished.catch(() => undefined)
+  else swap()
 }
 
 // Before the first render: the last known skin, so the page does not flash
 // the default look while the plugin list loads.
 export function preloadStyles() {
   try {
-    applyStyles(JSON.parse(localStorage.getItem(STYLES_KEY) ?? '[]'))
+    const want: PluginStyle[] = JSON.parse(localStorage.getItem(STYLES_KEY) ?? '[]')
+    // Applied right away: nothing is on screen yet.
+    for (const w of want) {
+      const link = document.createElement('link')
+      link.rel = 'stylesheet'
+      link.href = w.href
+      link.dataset.plugin = w.id
+      document.head.appendChild(link)
+    }
+    const skin = want.find((w) => w.skin)?.id
+    if (skin) document.documentElement.dataset.skin = skin
   } catch {}
 }
 
 // Bring loaded browser code in line with the server's plugin list.
 export async function syncPlugins(list: PluginInfo[]) {
   const styles = list.filter((p) => p.styles).map((p) => ({ id: p.id, href: p.styles!, skin: !!p.skin }))
-  applyStyles(styles)
   localStorage.setItem(STYLES_KEY, JSON.stringify(styles))
+  await applyStyles(styles)
   for (const [id, l] of loaded) if (!list.some((p) => p.id === id && p.web === l.url)) unload(id)
   await Promise.all(list.filter((p) => p.web && !loaded.has(p.id)).map((p) => load(p.id, p.web!)))
 }

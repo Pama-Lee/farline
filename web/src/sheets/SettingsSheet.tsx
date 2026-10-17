@@ -5,7 +5,7 @@ import { Sheet } from '../components/Sheet.tsx'
 import { Spinner, toast } from '../components/bits.tsx'
 import { CATALOG_CHANGED, api } from '../lib/api.ts'
 import { currentPushSubscription, disablePush, enablePush, isStandalone, pushSupported } from '../lib/device.ts'
-import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
+import { PluginBoundary, syncPlugins, usePlugins } from '../plugins/runtime.tsx'
 import { setStepsView, useStepsView, type StepsView } from '../lib/prefs.ts'
 
 type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'market' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
@@ -29,6 +29,8 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
   const [statuses, setStatuses] = useState<Record<string, PluginStatus>>({})
   const { settingsPanels } = usePlugins()
   const stepsView = useStepsView()
+  // The skin being switched to (null: the default look) while it loads.
+  const [switching, setSwitching] = useState<string | null | undefined>(undefined)
 
   const loadStatus = useCallback((p: PluginInfo) => {
     if (p.state !== 'active' || !p.hasStatus) return
@@ -75,10 +77,13 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
     }
   }
 
+  // The switch flips at once; it flips back if the server says no.
   const toggle = async (p: PluginInfo) => {
+    setPlugins((list) => list?.map((x) => (x.id === p.id ? { ...x, enabled: !p.enabled } : x)) ?? null)
     try {
       changed(await api.setPluginEnabled(p.id, !p.enabled))
     } catch (e: any) {
+      setPlugins((list) => list?.map((x) => (x.id === p.id ? { ...x, enabled: p.enabled } : x)) ?? null)
       toast(e?.message ?? '操作失败')
     }
   }
@@ -106,14 +111,21 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
   const skins = (plugins ?? []).filter((p) => p.skin)
   const activeSkin = skins.find((p) => p.enabled && p.state === 'active')
 
+  // Stays busy until the new look is on screen.
   const pickSkin = async (id: string | null) => {
+    if (switching !== undefined || (activeSkin?.id ?? null) === id) return
+    setSwitching(id)
     try {
       if (id) await api.setPluginEnabled(id, true)
       else if (activeSkin) await api.setPluginEnabled(activeSkin.id, false)
-      setPlugins(await api.plugins())
+      const list = await api.plugins()
+      await syncPlugins(list)
+      setPlugins(list)
       window.dispatchEvent(new Event(CATALOG_CHANGED))
     } catch (e: any) {
       toast(e?.message ?? '操作失败')
+    } finally {
+      setSwitching(undefined)
     }
   }
 
@@ -121,12 +133,15 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
     return (
       <Sheet title="外观" onClose={onClose} onBack={() => setView({ name: 'main' })}>
         <div className="group">
-          {[{ id: null, name: '默认' }, ...skins].map((k) => (
-            <button className="option" key={k.id ?? 'default'} onClick={() => void pickSkin(k.id)}>
-              <span className="grow">{k.name}</span>
-              {(activeSkin?.id ?? null) === k.id && <Check size={20} strokeWidth={2.2} className="check" />}
-            </button>
-          ))}
+          {[{ id: null, name: '默认' }, ...skins].map((k) => {
+            const target = switching !== undefined ? switching : (activeSkin?.id ?? null)
+            return (
+              <button className="option" key={k.id ?? 'default'} disabled={switching !== undefined && switching !== k.id} onClick={() => void pickSkin(k.id)}>
+                <span className="grow">{k.name}</span>
+                {switching === k.id ? <Spinner size={18} /> : target === k.id && <Check size={20} strokeWidth={2.2} className="check" />}
+              </button>
+            )
+          })}
         </div>
       </Sheet>
     )

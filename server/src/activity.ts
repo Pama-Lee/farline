@@ -18,7 +18,7 @@ interface Activity {
 
 const cache = new Map<string, { mtimeMs: number; size: number; act: Activity }>()
 
-function sessionFile(id: string): string | undefined {
+export function sessionFile(id: string): string | undefined {
   const cached = paths.get(id)
   if (cached && existsSync(cached)) return cached
   for (const dir of readdirSync(PROJECTS)) {

@@ -13,9 +13,10 @@ import {
   type PermissionResult,
   type PermissionUpdate,
   type Query,
+  type RewindFilesResult,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
-import { runningElsewhere } from './activity.ts'
+import { runningElsewhere, sessionFile } from './activity.ts'
 import { config, underFsRoot } from './config.ts'
 import { allProviders, emit, provider as pluginProvider, secretEnv } from './plugins/registry.ts'
 import type { SessionInfo } from './plugins/types.ts'
@@ -301,7 +302,9 @@ export class SessionView {
       includePartialMessages: true,
       systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, snapshot: true },
       canUseTool: this.canUseTool,
+      enableFileCheckpointing: true,
       ...(this.persisted ? { resume: this.id } : { sessionId: this.id }),
+      ...(this.persisted && this.meta.rewind ? { resumeSessionAt: this.meta.rewind.at } : {}),
       stderr: (d: string) => {
         if (/error/i.test(d)) console.error(`[${this.id.slice(0, 8)}] ${d.trim().slice(0, 500)}`)
       },
@@ -411,6 +414,11 @@ export class SessionView {
               this.model = m.model
               this.mcp = (m.mcp_servers ?? []).map((s: any) => ({ name: s.name, status: s.status }))
               this.persisted = true
+              if (this.meta.rewind) {
+                delete this.meta.rewind
+                state.sessions[this.id] = { ...this.meta }
+                save()
+              }
               if (m.permissionMode && m.permissionMode !== this.meta.permissionMode) this.meta.permissionMode = m.permissionMode
               void refreshClaudeModels(q)
               this.flushNow(true)
@@ -573,6 +581,61 @@ export class SessionView {
     this.flushNow(true)
   }
 
+  // ---- rewind ----
+
+  // The session's own process, or a short-lived one that only resumes it.
+  private async withProcess<T>(fn: (q: Query) => Promise<T>): Promise<T> {
+    if (this.q) return fn(this.q)
+    const env: Record<string, string | undefined> = { ...process.env }
+    for (const k of Object.keys(env)) if (k.startsWith('FARLINE_') || secretEnv.has(k)) delete env[k]
+    async function* never(): AsyncGenerator<SDKUserMessage> {
+      await new Promise(() => {})
+    }
+    const q = query({ prompt: never(), options: { cwd: this.cwd, env, pathToClaudeCodeExecutable: config.claudePath, resume: this.id, enableFileCheckpointing: true } })
+    try {
+      return await Promise.race([fn(q), new Promise<never>((_, rej) => setTimeout(() => rej(new Error('超时')), 60_000))])
+    } finally {
+      q.close()
+    }
+  }
+
+  // What rewinding the code to before this message would change.
+  async rewindPreview(messageId: string): Promise<RewindFilesResult> {
+    if (!this.persisted) return { canRewind: false }
+    return this.withProcess((q) => q.rewindFiles(messageId, { dryRun: true })).catch((e) => ({ canRewind: false, error: String(e?.message ?? e) }))
+  }
+
+  // Go back to just before a user message: its files, the conversation, or both.
+  async rewind(messageId: string, opts: { files: boolean; conversation: boolean }): Promise<{ restart?: boolean; files?: RewindFilesResult }> {
+    if (this.status !== 'idle' || (!this.live && runningElsewhere(this.id))) throw new Error('等这一轮结束再回退')
+    const i = this.log.items.findIndex((it) => it.id === messageId && it.kind === 'user')
+    if (i < 0) throw new Error('找不到这条消息')
+    const parent = opts.conversation ? parentOf(this.id, messageId) : undefined
+    if (opts.conversation && parent === undefined) throw new Error('找不到这条消息')
+    if (opts.conversation && this.runningTasks) throw new Error('还有后台任务在运行')
+    let files: RewindFilesResult | undefined
+    if (opts.files) {
+      files = await this.withProcess((q) => q.rewindFiles(messageId))
+      if (!files.canRewind) throw new Error(files.error || '没有可回退的文件改动')
+    }
+    if (!opts.conversation) return { files }
+    // Rewinding to the first message leaves nothing; start over instead.
+    if (parent === null) return { files, restart: true }
+    this.close()
+    this.meta.rewind = { at: parent!, from: messageId }
+    state.sessions[this.id] = { ...this.meta }
+    save()
+    this.truncateAt(messageId)
+    this.flushNow(true)
+    return { files }
+  }
+
+  truncateAt(messageId: string) {
+    const i = this.log.items.findIndex((it) => it.id === messageId)
+    if (i < 0) return
+    for (const it of this.log.items.slice(i)) this.log.remove(it.id)
+  }
+
   async mcpStatus(): Promise<McpServer[]> {
     if (this.q) {
       const list = await this.q.mcpServerStatus().catch(() => undefined)
@@ -676,6 +739,21 @@ export class SessionView {
   }
 }
 
+// The transcript entry a message follows: undefined when it is not found,
+// null for the first one.
+function parentOf(sessionId: string, uuid: string): string | null | undefined {
+  const file = sessionFile(sessionId)
+  if (!file) return undefined
+  for (const line of readFileSync(file, 'utf8').split('\n')) {
+    if (!line.includes(uuid)) continue
+    try {
+      const e = JSON.parse(line)
+      if (e.uuid === uuid) return e.parentUuid ?? null
+    } catch {}
+  }
+  return undefined
+}
+
 // ---- registry ----
 
 const views = new Map<string, SessionView>()
@@ -718,6 +796,7 @@ export async function openView(id: string): Promise<SessionView | undefined> {
     const model = (m as any).message?.model
     if (m.type === 'assistant' && typeof model === 'string' && !(m as any).parent_tool_use_id && model !== '<synthetic>') view.model = model
   }
+  if (meta.rewind) view.truncateAt(meta.rewind.from)
   view.log.discardChanges()
   views.set(id, view)
   return view

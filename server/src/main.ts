@@ -293,6 +293,24 @@ api.post('/sessions/:id/background', async (c) => {
   }
 })
 
+api.get('/sessions/:id/rewind/:messageId', async (c) => {
+  const view = await openView(c.req.param('id'))
+  if (!view) return c.json({ error: '会话不存在' }, 404)
+  return c.json(await view.rewindPreview(c.req.param('messageId')))
+})
+
+api.post('/sessions/:id/rewind', async (c) => {
+  const body = await c.req.json<{ messageId?: string; files?: boolean; conversation?: boolean }>().catch(() => ({}) as { messageId?: string; files?: boolean; conversation?: boolean })
+  const view = await openView(c.req.param('id'))
+  if (!view) return c.json({ error: '会话不存在' }, 404)
+  if (!body.messageId || (!body.files && !body.conversation)) return c.json({ error: '参数不对' }, 400)
+  try {
+    return c.json(await view.rewind(body.messageId, { files: !!body.files, conversation: !!body.conversation }))
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '回退失败' }, 409)
+  }
+})
+
 api.get('/sessions/:id/mcp', async (c) => {
   const view = await openView(c.req.param('id'))
   return c.json(view ? await view.mcpStatus() : [])

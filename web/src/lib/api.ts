@@ -53,6 +53,14 @@ export interface DeviceInfo {
   prefs: { lastCwd?: string; provider?: Provider; model?: string; permissionMode?: PermissionMode; effort?: EffortLevel; classifierModel?: string }
 }
 
+export interface RewindPreview {
+  canRewind: boolean
+  error?: string
+  filesChanged?: string[]
+  insertions?: number
+  deletions?: number
+}
+
 export const api = {
   me: () => req<{ authed: boolean }>('GET', '/me'),
   login: (password: string) => req<{ ok: true }>('POST', '/login', { password }),
@@ -76,6 +84,8 @@ export const api = {
   mcp: (id: string) => req<McpServer[]>('GET', `/sessions/${id}/mcp`),
   taskOutput: (id: string, taskId: string) => req<TaskOutput>('GET', `/sessions/${id}/tasks/${taskId}/output`),
   stopTask: (id: string, taskId: string) => req<{ ok: true }>('POST', `/sessions/${id}/tasks/${taskId}/stop`),
+  rewindPreview: (id: string, messageId: string) => req<RewindPreview>('GET', `/sessions/${id}/rewind/${messageId}`),
+  rewind: (id: string, body: { messageId: string; files: boolean; conversation: boolean }) => req<{ restart?: boolean }>('POST', `/sessions/${id}/rewind`, body),
   backgroundTool: (id: string, toolUseId: string) => req<{ ok: boolean }>('POST', `/sessions/${id}/background`, { toolUseId }),
   readFile: (path: string) => req<FileRead>('GET', `/fs/read?path=${encodeURIComponent(path)}`),
   dirs: (path?: string, hidden = false) => req<DirListing>('GET', `/fs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: '1' } : {}) })}`),

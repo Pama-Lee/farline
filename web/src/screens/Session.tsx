@@ -1,4 +1,4 @@
-import { ArrowUp, ChevronLeft, ChevronRight, Copy, EyeOff, FileText, ListChecks, Mic, MoreHorizontal, PencilLine, Play, Plus, Puzzle, RefreshCw, Square, X } from 'lucide-react'
+import { ArrowUp, ChevronLeft, ChevronRight, Copy, EyeOff, FileText, ListChecks, Mic, MoreHorizontal, PencilLine, Play, Plus, Puzzle, RefreshCw, Square, Undo2, X } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Catalog, EffortLevel, Item, ModelOption, PermissionMode, Provider, ProviderInfo, SessionState } from '../../../shared/types.ts'
 import { Markdown } from '../components/Markdown.tsx'
@@ -19,6 +19,7 @@ import { ContextSheet } from '../sheets/ContextSheet.tsx'
 import { EFFORT_LABELS, ModelSheet, isCurrent } from '../sheets/ModelSheet.tsx'
 import { ModelMenu, wantsMenuPicker } from '../sheets/ModelMenu.tsx'
 import { InlineSteps, StepsSheet } from '../sheets/StepsSheet.tsx'
+import { DRAFT_EVENT, RewindSheet } from '../sheets/RewindSheet.tsx'
 import { useInlineSteps } from '../lib/prefs.ts'
 import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
 import { collectTasks, type TaskView } from '../lib/tasks.ts'
@@ -50,6 +51,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   }))
   const [steps, setSteps] = useState<StepItem[] | null>(null)
   const [stepsId, setStepsId] = useState<string | null>(null)
+  const [rewindAt, setRewindAt] = useState<{ id: string; text: string } | null>(null)
   const [menu, setMenu] = useState(false)
   // Background tasks sheet, optionally opened on one task.
   const [taskSheet, setTaskSheet] = useState<{ openId: string | null } | null>(null)
@@ -192,7 +194,18 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
             )}
             {session.error && <div className="empty">{session.error}</div>}
             {blocks.map((b, i) => {
-              if (b.type === 'user') return <UserMsg key={b.item.id} item={b.item} />
+              if (b.type === 'user')
+                return (
+                  <UserMsg
+                    key={b.item.id}
+                    item={b.item}
+                    onRewind={
+                      id && !busy
+                        ? () => setRewindAt({ id: b.item.id, text: b.item.text })
+                        : undefined
+                    }
+                  />
+                )
               if (b.type === 'text')
                 return (
                   <div className="msg-text" key={b.item.id}>
@@ -311,6 +324,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
             }}
           />
         )}
+        {rewindAt && id && state && <RewindSheet sessionId={id} cwd={state.cwd} messageId={rewindAt.id} text={rewindAt.text} onClose={() => setRewindAt(null)} />}
         {taskSheet && id && <TasksSheet sessionId={id} tasks={tasks} live={!!state?.live} openId={taskSheet.openId} onClose={() => setTaskSheet(null)} />}
         {menu && id && state && (
           <SessionMenu
@@ -445,10 +459,12 @@ function Thinking({ since }: { since?: number }) {
   )
 }
 
-function UserMsg({ item }: { item: Extract<Item, { kind: 'user' }> }) {
+function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; onRewind?: () => void }) {
   const files = (item.files ?? []).filter((f) => !/\.(jpe?g|png|gif|webp|heic)$/i.test(f))
+  // Touch screens: tap the bubble for its actions.
+  const [shown, setShown] = useState(false)
   return (
-    <div className="msg-user">
+    <div className={`msg-user${shown ? ' shown' : ''}`}>
       {item.images && (
         <div className="msg-images">
           {item.images.map((im, i) => (
@@ -463,7 +479,30 @@ function UserMsg({ item }: { item: Extract<Item, { kind: 'user' }> }) {
           <FileText size={15} /> {basename(f).replace(/^[\w-]{12}-/, '')}
         </div>
       ))}
-      {item.text && <div className="bubble">{item.text}</div>}
+      {item.text && (
+        <div className="bubble" onClick={() => setShown((x) => !x)}>
+          {item.text}
+        </div>
+      )}
+      <div className="msg-actions user">
+        {item.text && (
+          <button
+            onClick={async () => {
+              await copyText(item.text)
+              toast('已复制')
+            }}
+            aria-label="复制"
+            title="复制"
+          >
+            <Copy size={16} strokeWidth={1.6} />
+          </button>
+        )}
+        {onRewind && (
+          <button onClick={onRewind} aria-label="回退到这里" title="回退到这里">
+            <Undo2 size={16} strokeWidth={1.6} />
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -706,6 +745,16 @@ function Composer(p: {
 }) {
   const storeKey = `farline.draft.${p.sessionId ?? 'new'}`
   const [text, setText] = useState(() => sessionStorage.getItem(storeKey) ?? '')
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ key: string; text: string }>).detail
+      if (d.key !== storeKey) return
+      setText(d.text)
+      ta.current?.focus()
+    }
+    window.addEventListener(DRAFT_EVENT, on)
+    return () => window.removeEventListener(DRAFT_EVENT, on)
+  }, [storeKey])
   const [atts, setAtts] = useState<Attachment[]>([])
   const [sheet, setSheet] = useState<'context' | 'model' | null>(null)
   const [menuAt, setMenuAt] = useState<DOMRect | null>(null)

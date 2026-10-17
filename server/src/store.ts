@@ -11,6 +11,9 @@ export interface SessionMeta {
   classifierModel?: string
   hidden?: boolean
   title?: string
+  // Rewound: the next process resumes at `at`, and the transcript is shown
+  // without `from` (the user message rewound to) and what followed it.
+  rewind?: { at: string; from: string }
 }
 
 interface State {

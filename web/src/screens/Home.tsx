@@ -103,7 +103,7 @@ export function Home({ device, onLogout }: { device: DeviceInfo | null; onLogout
           </button>
         </div>
         <div className="title">
-          <h1 className="home-title">Code</h1>
+          <h1 className="home-title">Farline</h1>
         </div>
         <div className="right">
           <div className="pill-btns">

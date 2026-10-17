@@ -783,7 +783,7 @@ function Composer(p: {
         rows={1}
         value={text}
         autoFocus={p.autoFocus}
-        placeholder="回复 Claude"
+        placeholder={p.sessionId ? '回复' : '要做什么'}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return

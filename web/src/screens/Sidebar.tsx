@@ -24,7 +24,7 @@ export function Sidebar({ device, activeId, onLogout }: { device: DeviceInfo | n
   return (
     <aside className="sidebar">
       <div className="sb-head">
-        <span className="sb-title">Code</span>
+        <span className="sb-title">Farline</span>
         <div className="sb-icons">
           <button onClick={() => setSheet('history')} aria-label="历史" title="历史">
             <Clock size={18} strokeWidth={1.7} />

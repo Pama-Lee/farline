@@ -9,6 +9,7 @@ export function Login({ onDone }: { onDone: () => void }) {
   return (
     <div className="screen login">
       <img src="/icons/icon-192.png" alt="" />
+      <div className="login-name">Farline</div>
       <form
         onSubmit={async (e) => {
           e.preventDefault()

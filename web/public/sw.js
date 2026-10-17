@@ -1,5 +1,5 @@
 // App shell cache + web push. API traffic always goes to the network.
-const CACHE = 'farline-v1'
+const CACHE = 'farline-v2'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icons/icon-192.png'])))
@@ -52,11 +52,11 @@ self.addEventListener('push', (e) => {
   try {
     data = e.data ? e.data.json() : {}
   } catch {
-    data = { title: 'Code', body: e.data ? e.data.text() : '' }
+    data = { title: 'Farline', body: e.data ? e.data.text() : '' }
   }
   const url = data.url || '/'
   e.waitUntil(
-    self.registration.showNotification(data.title || 'Code', {
+    self.registration.showNotification(data.title || 'Farline', {
       body: data.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/icon-192.png',

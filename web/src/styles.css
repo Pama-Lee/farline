@@ -1450,6 +1450,13 @@ textarea {
   height: 52px;
 }
 
+.login-name {
+  margin: -8px 0 4px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
 .login .err {
   color: var(--red);
   font-size: 15px;

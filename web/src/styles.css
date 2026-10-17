@@ -847,61 +847,45 @@ textarea {
 /* tool calls opened in the conversation */
 
 .inline-steps {
-  margin: -6px 0 14px;
-  border-left: 1.5px solid var(--line);
-  padding-left: 14px;
+  margin: -4px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
 }
 
-.inline-steps.single {
-  padding-top: 2px;
-  padding-bottom: 2px;
-}
-
-.inline-steps .field-label:first-child {
-  margin-top: 0;
+.is-item + .is-item {
+  border-top: 1px solid var(--line);
 }
 
 .is-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
-  padding: 5px 0;
+  padding: 10px 14px;
   text-align: left;
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 14.5px;
+  line-height: 21px;
   color: var(--text-2);
 }
 
-.is-head .ic {
-  flex: none;
-  width: 18px;
-  display: grid;
-  place-items: center;
-}
-
-.is-head .l1 {
-  flex: none;
-  color: var(--text);
-}
-
-.is-head.error .l1 {
-  color: var(--red);
-}
-
-.is-head .l2 {
+.is-head .l {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text-3);
+}
+
+.is-head .err {
+  flex: none;
+  color: var(--red);
+  margin-left: 4px;
 }
 
 .is-head .chev {
   flex: none;
-  margin-left: auto;
-  color: var(--text-3);
   transition: transform 0.15s;
 }
 
@@ -910,7 +894,47 @@ textarea {
 }
 
 .is-body {
-  padding: 2px 0 10px 26px;
+  padding: 0 14px 12px;
+}
+
+.is-body .field-label:first-child {
+  margin-top: 0;
+}
+
+.is-cmd {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.is-cmd .ps {
+  color: var(--text-2);
+}
+
+.is-out {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.is-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: pre-wrap;
 }
 
 .thumbs {
@@ -2753,4 +2777,9 @@ a.option {
 .menu-tabs button.on {
   background: var(--fill);
   color: var(--text);
+}
+
+.is-body .detail-images img {
+  max-height: 240px;
+  width: auto;
 }

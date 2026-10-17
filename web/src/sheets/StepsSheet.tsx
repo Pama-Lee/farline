@@ -1,4 +1,4 @@
-import { Bot, Brain, CheckCircle2, ChevronRight, Circle, CircleDot, FilePen, FileText, Globe, ListTodo, Plug, Search, SquareTerminal, Wrench } from 'lucide-react'
+import { Bot, CheckCircle2, Clock, ChevronRight, Circle, CircleDot, FilePen, FileText, Globe, ListTodo, Plug, Search, SquareTerminal, Wrench } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { highlight } from '../components/Markdown.tsx'
 import { Sheet } from '../components/Sheet.tsx'
@@ -16,14 +16,10 @@ const ICONS: Record<string, ReactNode> = {
   edit: <FilePen size={19} strokeWidth={1.6} />,
   search: <Search size={19} strokeWidth={1.6} />,
   agent: <Bot size={19} strokeWidth={1.6} />,
-  think: <Brain size={19} strokeWidth={1.6} />,
+  think: <Clock size={19} strokeWidth={1.6} />,
   todo: <ListTodo size={19} strokeWidth={1.6} />,
   other: <Wrench size={19} strokeWidth={1.6} />,
 }
-
-const ICONS_SM: Record<string, ReactNode> = Object.fromEntries(
-  Object.entries({ web: Globe, bash: SquareTerminal, read: FileText, edit: FilePen, search: Search, agent: Bot, think: Brain, todo: ListTodo, other: Wrench }).map(([k, I]) => [k, <I size={16} strokeWidth={1.6} />]),
-)
 
 interface Props {
   steps: StepItem[]
@@ -113,15 +109,10 @@ function StepDetail({ step, onBack, ...rest }: Omit<Props, 'steps'> & { step: St
   )
 }
 
-// The steps of a group, opened in the conversation instead of a sheet.
+// The steps of a group, opened in the conversation instead of a sheet: a
+// card of rows, each one opening in place.
 export function InlineSteps({ steps, ...rest }: Props) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(steps.length === 1 ? [steps[0].id] : []))
-  if (steps.length === 1)
-    return (
-      <div className="inline-steps single">
-        <StepBody step={steps[0]} {...rest} />
-      </div>
-    )
   const toggle = (id: string) =>
     setOpen((o) => {
       const n = new Set(o)
@@ -132,19 +123,21 @@ export function InlineSteps({ steps, ...rest }: Props) {
     <div className="inline-steps">
       {steps.map((s) => {
         const { l1, l2 } = stepLabel(s)
+        const failed = s.kind === 'tool' && s.status === 'error'
         const running = s.kind === 'tool' ? s.status === 'running' : s.streaming
+        const label = s.kind === 'thinking' ? l1 : s.kind === 'tool' && s.name === 'Bash' && !s.taskId ? l2 || l1 : `${l1} ${l2}`.trim()
         const isOpen = open.has(s.id)
         return (
           <div key={s.id} className={`is-item${isOpen ? ' open' : ''}`}>
-            <button className={`is-head${s.kind === 'tool' && s.status === 'error' ? ' error' : ''}`} onClick={() => toggle(s.id)}>
-              <span className="ic">{running ? <Spinner size={15} /> : s.kind === 'tool' && s.name.startsWith('mcp__') ? <Plug size={16} strokeWidth={1.6} /> : ICONS_SM[category(s)]}</span>
-              <span className="l1">{l1}</span>
-              {l2 && <span className="l2">{l2}</span>}
+            <button className="is-head" onClick={() => toggle(s.id)}>
+              {running && <Spinner size={14} />}
+              <span className="l">{label}</span>
+              {failed && <span className="err">失败</span>}
               <ChevronRight size={15} strokeWidth={1.7} className="chev" />
             </button>
             {isOpen && (
               <div className="is-body">
-                <StepBody step={s} {...rest} />
+                <StepBody step={s} compact {...rest} />
               </div>
             )}
           </div>
@@ -154,10 +147,10 @@ export function InlineSteps({ steps, ...rest }: Props) {
   )
 }
 
-function StepBody({ step, sessionId, live, onOpenTask, onClose }: Omit<Props, 'steps'> & { step: StepItem }) {
+function StepBody({ step, sessionId, live, onOpenTask, onClose, compact }: Omit<Props, 'steps'> & { step: StepItem; compact?: boolean }) {
   const { toolRenderers } = usePlugins()
   const [moving, setMoving] = useState(false)
-  if (step.kind === 'thinking') return <Field label="内容" plain>{step.text}</Field>
+  if (step.kind === 'thinking') return compact ? <div className="is-text">{step.text}</div> : <Field label="内容" plain>{step.text}</Field>
   const i = step.input
   const out = step.result !== undefined ? step.result + (step.truncated ? '\n…（已截断）' : '') : step.status === 'running' ? null : ''
   const movable = !step.taskId && step.status === 'running' && live && !!sessionId && ['Bash', 'Agent', 'Task'].includes(step.name)
@@ -201,7 +194,15 @@ function StepBody({ step, sessionId, live, onOpenTask, onClose }: Omit<Props, 's
   let body: ReactNode
   switch (step.name) {
     case 'Bash':
-      body = (
+      body = compact ? (
+        <>
+          <div className="is-cmd">
+            <span className="ps">$</span>
+            <span dangerouslySetInnerHTML={{ __html: highlight(s(i.command), 'bash') }} />
+          </div>
+          {step.taskId || movable || step.images?.length ? output : out ? <div className="is-out">{out}</div> : null}
+        </>
+      ) : (
         <>
           {!!i.description && <Field label="描述" plain>{s(i.description)}</Field>}
           <Field label="命令">

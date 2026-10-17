@@ -12,6 +12,7 @@ import { existsFile, readPath, resolvePaths } from './files.ts'
 import { noteOrigin } from './origin.ts'
 import { getPlugin, listPlugins, loadPlugins, pluginAsset, pluginFetch, pluginInfo, pluginStatus, remoteOf, saveSettings, setEnabled, testNotification, uninstall } from './plugins/host.ts'
 import { installFromGitHub } from './plugins/remote.ts'
+import { marketPlugins } from './plugins/market.ts'
 import { subscribe, unsubscribe, vapidPublicKey, notify } from './push.ts'
 import { save, state } from './store.ts'
 import { requestTitle } from './titles.ts'
@@ -62,6 +63,14 @@ const serially = <T>(fn: () => Promise<T>): Promise<T> => {
   installing = next.catch(() => undefined)
   return next
 }
+
+api.get('/plugins/market', async (c) => {
+  try {
+    return c.json(await marketPlugins(c.req.query('refresh') === '1'))
+  } catch (e: any) {
+    return c.json({ error: e?.message ?? '加载失败' }, 502)
+  }
+})
 
 api.post('/plugins/install', async (c) => {
   const { source } = await c.req.json<{ source?: string }>().catch(() => ({ source: undefined }))

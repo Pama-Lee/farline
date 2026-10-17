@@ -577,6 +577,53 @@ textarea {
   min-height: 63px;
 }
 
+.market-item {
+  align-items: flex-start;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  gap: 12px;
+}
+
+.market-item > a {
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+
+.market-item .mk-name {
+  display: block;
+  font-weight: 500;
+}
+
+.market-item .mk-desc {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 18px;
+  margin: 2px 0 3px;
+}
+
+.mk-btn {
+  flex: none;
+  height: 30px;
+  min-width: 58px;
+  padding: 0 14px;
+  border-radius: 15px;
+  background: var(--black);
+  color: #fff;
+  font-size: 13.5px;
+  display: grid;
+  place-items: center;
+}
+
+.mk-btn.ghost {
+  background: var(--fill);
+  color: var(--text-2);
+}
+
+.mk-btn:disabled:not(.ghost) {
+  opacity: 0.35;
+}
+
 .check {
   color: var(--blue);
   flex: none;

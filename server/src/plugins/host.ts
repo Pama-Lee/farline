@@ -16,10 +16,11 @@ import { config } from '../config.ts'
 import { allViews, cachedView, openView } from '../live.ts'
 import { sendTo } from '../push.ts'
 import { anthropicCompatible } from './helpers.ts'
+import { FARLINE_VERSION, satisfies } from './semver.ts'
 import { addChannel, addHook, addProvider, allChannels, secretEnv } from './registry.ts'
 import type { Disposable, PluginContext, PluginDefinition, SettingField, SettingValues } from './types.ts'
 
-const API_VERSION = 1
+export const API_VERSION = 1
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,40}$/
 
 interface Manifest {
@@ -32,6 +33,8 @@ interface Manifest {
   styles?: string
   skin?: boolean
   enabledByDefault?: boolean
+  // Farline versions it runs on, from "engines.farline".
+  engines?: string
 }
 
 interface Plugin {
@@ -116,6 +119,7 @@ export function readManifest(dir: string): Manifest | undefined {
       web: f.web,
       styles: f.styles,
       skin: f.skin === true,
+      engines: typeof pkg.engines?.farline === 'string' ? pkg.engines.farline : undefined,
       // A newly installed skin should not take over the look by itself.
       enabledByDefault: f.enabledByDefault ?? (f.skin === true ? false : undefined),
     }
@@ -253,6 +257,7 @@ async function importDefinition(p: Plugin): Promise<PluginDefinition | undefined
 async function activate(p: Plugin) {
   try {
     if (p.manifest.apiVersion !== API_VERSION) throw new Error(`needs plugin API v${p.manifest.apiVersion}, this Farline has v${API_VERSION}`)
+    if (p.manifest.engines && !satisfies(FARLINE_VERSION, p.manifest.engines)) throw new Error(`needs Farline ${p.manifest.engines}, this is ${FARLINE_VERSION}`)
     p.def = await importDefinition(p)
     for (const f of fields(p)) if (f.env) secretEnv.add(f.env)
     if (p.def) {

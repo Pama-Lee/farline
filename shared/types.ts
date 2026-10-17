@@ -247,6 +247,26 @@ export interface RemoteSource {
   installedAt: number
 }
 
+// A plugin published on GitHub (topic farline-plugin).
+export interface MarketPlugin {
+  id: string
+  name: string
+  description: string
+  author: string
+  version: string
+  repo: string
+  url: string
+  stars: number
+  updatedAt: number
+  skin: boolean
+  // "engines.farline" and "farline.apiVersion" of its package.json.
+  engines?: string
+  apiVersion: number
+  compatible: boolean
+  // A plugin with this id is already here; fromHere when it came from this repo.
+  installed?: { version: string; fromHere: boolean }
+}
+
 export interface PluginInfo {
   id: string
   name: string

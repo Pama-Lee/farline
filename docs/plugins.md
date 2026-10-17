@@ -43,6 +43,37 @@ https://github.com/owner/repo/tree/main/path/to/plugin
 
 从 GitHub 装的插件可以顶替同 id 的内置插件，卸载后内置的回来；和本地插件、npm 插件 id 冲突时拒绝安装。私有仓库要设 `FARLINE_GITHUB_TOKEN`。
 
+### 发现插件
+
+「设置 → 插件 → 发现插件」列出 GitHub 上打了 `farline-plugin` 话题（topic）的仓库，点安装就是上面那套流程。要让自己的插件出现在这里：
+
+1. 插件放在仓库根目录（根目录的 `package.json` 有 `farline` 字段）
+2. 仓库 About 里加上 topic `farline-plugin`
+
+列表里的信息都从根目录 `package.json` 读：
+
+```json
+{
+  "name": "farline-plugin-todo",
+  "version": "0.3.1",
+  "description": "把会话里的待办同步到 Things",
+  "author": "Alice <alice@example.com>",
+  "engines": { "farline": ">=1.0.0" },
+  "farline": { "id": "todo", "name": "待办同步", "apiVersion": 1, "server": "./server.js" }
+}
+```
+
+| 字段 | 用途 |
+| --- | --- |
+| `farline.name` | 显示名 |
+| `farline.description`，没有就用 `description`，再没有用仓库简介 | 一句话介绍 |
+| `author`（字符串或 `{ "name" }`），没有就用仓库主人 | 作者 |
+| `version` | 版本 |
+| `engines.farline` | 支持的 Farline 版本，semver 范围（`>=1.0.0`、`^1.2`、`1.x`、`>=1 <3`、`a \|\| b`） |
+| `farline.apiVersion` | 插件 API 版本，默认 1 |
+
+`engines.farline` 或 `apiVersion` 对不上的插件照样列出，但标出需要的版本、不能安装；手动装上也不会启动。列表在服务端缓存 10 分钟，测试时可用 `FARLINE_PLUGIN_TOPIC` 换成别的话题。
+
 本地和 npm 插件装好后重启 Farline，到「设置 → 插件」里开关。启停不用重启：停用时插件注册的东西全部撤掉，再启用会重新加载服务端代码，所以改了代码停用再启用就能生效。前端代码改了要刷新页面。
 
 ## 清单

@@ -1,6 +1,6 @@
-import { ArrowUpRight, Bell, Check, ChevronRight, Download, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, ChevronRight, Compass, Download, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import type { PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
+import type { MarketPlugin, PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
 import { Spinner, toast } from '../components/bits.tsx'
 import { CATALOG_CHANGED, api } from '../lib/api.ts'
@@ -8,7 +8,7 @@ import { currentPushSubscription, disablePush, enablePush, isStandalone, pushSup
 import { PluginBoundary, usePlugins } from '../plugins/runtime.tsx'
 import { setStepsView, useStepsView, type StepsView } from '../lib/prefs.ts'
 
-type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'market' } | { name: 'skins' } | { name: 'steps' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
 
 const STEPS_VIEWS: { id: StepsView; label: string }[] = [
   { id: 'auto', label: '自动' },
@@ -145,6 +145,20 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
       </Sheet>
     )
 
+  if (view.name === 'market')
+    return (
+      <Sheet title="发现插件" onClose={onClose} onBack={() => setView({ name: 'plugins' })} size="tall">
+        <Market
+          onInstalled={(info) => {
+            setPlugins((list) => [...(list ?? []).filter((x) => x.id !== info.id), info])
+            loadStatus(info)
+            window.dispatchEvent(new Event(CATALOG_CHANGED))
+          }}
+          onOpen={(id) => setView({ name: 'plugin', id, back: 'plugins' })}
+        />
+      </Sheet>
+    )
+
   if (view.name === 'install')
     return (
       <Sheet title="从 GitHub 安装" onClose={onClose} onBack={() => setView({ name: 'plugins' })}>
@@ -183,7 +197,12 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
             ))}
           </div>
         )}
-        <button className="row-btn" style={{ marginTop: 12 }} onClick={() => setView({ name: 'install' })}>
+        <button className="row-btn" style={{ marginTop: 12 }} onClick={() => setView({ name: 'market' })}>
+          <Compass size={19} strokeWidth={1.6} />
+          <span className="grow">发现插件</span>
+          <ChevronRight size={18} color="var(--text-3)" />
+        </button>
+        <button className="row-btn" onClick={() => setView({ name: 'install' })}>
           <Download size={19} strokeWidth={1.6} />
           <span className="grow">从 GitHub 安装</span>
           <ChevronRight size={18} color="var(--text-3)" />
@@ -245,6 +264,72 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
         <span className="grow">退出登录</span>
       </button>
     </Sheet>
+  )
+}
+
+function Market({ onInstalled, onOpen }: { onInstalled: (p: PluginInfo) => void; onOpen: (id: string) => void }) {
+  const [list, setList] = useState<MarketPlugin[] | null>(null)
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState<string | null>(null)
+  const load = (refresh = false) =>
+    api.market(refresh).then(
+      (l) => (setList(l), setErr('')),
+      (e) => setErr(e?.message ?? '加载失败'),
+    )
+  useEffect(() => void load(), [])
+
+  const install = async (m: MarketPlugin) => {
+    if (busy || !confirm(`安装「${m.name}」？插件代码会在这台服务器上运行。`)) return
+    setBusy(m.repo)
+    try {
+      const info = await api.installPlugin(m.repo)
+      toast(`已安装 ${info.name}`)
+      onInstalled(info)
+      await load()
+    } catch (e: any) {
+      toast(e?.message ?? '安装失败')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (err && !list) return <div className="empty">{err}</div>
+  if (!list)
+    return (
+      <div className="empty">
+        <Spinner />
+      </div>
+    )
+  if (!list.length) return <div className="empty">还没有插件</div>
+  return (
+    <div className="group">
+      {list.map((m) => {
+        const meta = [m.author, m.version && `v${m.version}`, m.stars ? `★ ${m.stars}` : '', m.skin ? '皮肤' : ''].filter(Boolean).join(' · ')
+        return (
+          <div className="option market-item" key={m.repo}>
+            <a className="grow plain" href={m.url} target="_blank" rel="noreferrer">
+              <span className="mk-name">{m.name}</span>
+              {m.description && <span className="desc mk-desc">{m.description}</span>}
+              <span className="desc">{meta}</span>
+              {!m.compatible && <span className="desc danger">{m.engines ? `需要 Farline ${m.engines}` : `需要插件 API v${m.apiVersion}`}</span>}
+            </a>
+            {m.installed?.fromHere || (m.installed && !m.compatible) ? (
+              <button className="mk-btn ghost" onClick={() => onOpen(m.id)}>
+                已安装
+              </button>
+            ) : m.installed ? (
+              <button className="mk-btn ghost" disabled title="已有同 id 的插件">
+                已安装
+              </button>
+            ) : (
+              <button className="mk-btn" disabled={!m.compatible || !!busy} onClick={() => void install(m)}>
+                {busy === m.repo ? <Spinner size={15} /> : '安装'}
+              </button>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

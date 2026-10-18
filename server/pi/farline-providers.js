@@ -39,7 +39,8 @@ export default function (pi) {
     pi.registerProvider(p.id, {
       name: p.name,
       baseUrl: p.baseUrl,
-      apiKey: p.apiKey,
+      // The key itself: pi 0.x read a bare name as an env var, 1.x wants $NAME.
+      apiKey: process.env[p.apiKey] || p.apiKey,
       api: 'anthropic-messages',
       models: p.models.map((m) => ({
         id: m.id,

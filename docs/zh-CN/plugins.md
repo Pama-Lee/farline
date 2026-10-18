@@ -190,6 +190,8 @@ export default {
 | `ctx.http` | 一个 [Hono](https://hono.dev) 实例，路由挂在 `/api/ext/<id>/` 下，需要登录 |
 | `ctx.sessions.get(id)` | 读会话状态 |
 | `ctx.sessions.send(id, text)` | 以用户身份往会话里发一条消息 |
+| `ctx.sessions.react(id, messageId, emoji)` | 以 Agent 身份给消息贴表情 |
+| `ctx.agentTools.register(def)` | 给 Agent 加工具（见下文） |
 | `ctx.helpers.anthropicCompatible(opts)` | 生成指向 Anthropic 兼容接口的环境变量 |
 
 `register` / `on` 都返回 `{ dispose() }`，停用插件时会自动调用，一般不用自己管。
@@ -224,6 +226,27 @@ ctx.providers.register({
 - `defaultPermissionMode` 是切到这个提供商时的默认权限模式。
 - `env()` 在会话进程启动时调用。环境变量只在进程启动时生效，所以保存设置、启停插件后，用到这个提供商的会话会在空闲时重启进程，下一条消息自动接上。
 - `contextWindow` 要给：不认识的模型，Agent 按 20 万上下文计算，长会话会反复压缩。
+- `pi()` 把这个供应商共享给 pi 会话：返回它的 Anthropic 兼容接口 `{ baseUrl, apiKey, models }`（base URL 不带 `/v1`）。不写就只给 Claude Code 用。
+
+### Agent 工具
+
+给 Agent 加一个工具。Claude Code 会话里叫 `mcp__farline__<name>`，pi 会话里叫 `farline_<name>`，两边都由 Farline 执行。
+
+```ts
+ctx.agentTools.register({
+  name: 'react',
+  description: "Put an emoji reaction on the user's latest message.",
+  params: { emoji: { type: 'string', description: 'One emoji' } },
+  hidden: true,                         // 对话里不显示这次工具调用
+  instructions: 'You can react to …',   // 追加到 Agent 的系统提示
+  async run(args, call) {
+    await ctx.sessions.react(call.session.id, call.lastUserMessageId!, String(args.emoji))
+    return 'Reacted.'                   // 返回给 Agent
+  },
+})
+```
+
+`params` 是参数名到 `{ type: 'string' | 'number' | 'boolean', description?, optional?, enum? }` 的映射。工具在会话进程启动时生效。
 
 ### 通知渠道
 
@@ -350,3 +373,4 @@ npx esbuild src/web.tsx --bundle --format=esm --jsx=automatic --external:react -
 | `deepseek` | DeepSeek | 启用 | V4 Pro / V4.1 Flash，100 万上下文，显示余额；回退 `DEEPSEEK_API_KEY` |
 | `compatible` | 自定义提供商 | 启用 | 在设置里自己添加任意多个 Anthropic 兼容接口（中转、代理、别家模型），可测试连接、拉取模型列表 |
 | `wecom` | 企业微信 | 停用 | 通知发到企业微信群机器人 |
+| `reactions` | 表情回应 | 启用 | Agent 可以给你的消息贴表情（`react` 工具）；你也能给任意消息贴表情 |

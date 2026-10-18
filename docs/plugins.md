@@ -190,6 +190,8 @@ Each item in `settings` becomes a field on the plugin's settings page. Values ar
 | `ctx.http` | A [Hono](https://hono.dev) app, mounted at `/api/ext/<id>/` behind sign-in |
 | `ctx.sessions.get(id)` | Read a session's state |
 | `ctx.sessions.send(id, text)` | Send a message to a session as the user |
+| `ctx.sessions.react(id, messageId, emoji)` | Put the agent's reaction on a message |
+| `ctx.agentTools.register(def)` | Give the agent a tool (see below) |
 | `ctx.helpers.anthropicCompatible(opts)` | Environment that points the agent at an Anthropic-compatible API |
 
 `register` and `on` return `{ dispose() }`, which is called for you when the plugin is turned off.
@@ -224,6 +226,27 @@ ctx.providers.register({
 - `defaultPermissionMode` is the permission mode a session switches to with this provider.
 - `env()` runs when a session's process starts. Environment only takes effect at process start, so after settings are saved or the plugin is turned on or off, sessions using the provider restart their process when idle and carry on with the next message.
 - Give `contextWindow`: for models it doesn't know, the agent assumes 200k and long sessions keep compacting.
+- `pi()` shares the provider with pi sessions: return `{ baseUrl, apiKey, models }` for its Anthropic-compatible endpoint (base URL without `/v1`). Leave it out to keep the provider Claude Code only.
+
+### Agent tools
+
+Give the agent a tool. It works in Claude Code sessions (as `mcp__farline__<name>`) and pi sessions (as `farline_<name>`); the tool runs in Farline either way.
+
+```ts
+ctx.agentTools.register({
+  name: 'react',
+  description: "Put an emoji reaction on the user's latest message.",
+  params: { emoji: { type: 'string', description: 'One emoji' } },
+  hidden: true,                         // not shown as a tool call in the conversation
+  instructions: 'You can react to …',   // added to the agent's system prompt
+  async run(args, call) {
+    await ctx.sessions.react(call.session.id, call.lastUserMessageId!, String(args.emoji))
+    return 'Reacted.'                   // goes back to the agent
+  },
+})
+```
+
+`params` maps argument names to `{ type: 'string' | 'number' | 'boolean', description?, optional?, enum? }`. Tools are set when a session's process starts.
 
 ### Notification channels
 
@@ -350,3 +373,4 @@ The menu's classes are `.popover`, `.menu`, `.menu-row`, `.menu-sep`, `.menu-hea
 | `deepseek` | DeepSeek | On | V4 Pro / V4.1 Flash, 1M context, shows the balance; falls back to `DEEPSEEK_API_KEY` |
 | `compatible` | Custom providers | On | Add as many Anthropic-compatible APIs as you like in Settings (relays, proxies, other vendors), with a connection test and model listing |
 | `wecom` | WeCom | Off | Sends notifications to a WeCom group robot |
+| `reactions` | Reactions | On | The agent can react to your messages with an emoji (`react` tool); you can react to any message |

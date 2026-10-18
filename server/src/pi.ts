@@ -108,10 +108,15 @@ class RpcProcess {
         } catch {
           continue
         }
-        if (msg.type === 'response' && msg.id && this.waiting.has(msg.id)) {
-          this.waiting.get(msg.id)!(msg)
-          this.waiting.delete(msg.id)
-        } else this.onEvent(msg)
+        // A surprise in pi's output must not take Farline down with it.
+        try {
+          if (msg.type === 'response' && msg.id && this.waiting.has(msg.id)) {
+            this.waiting.get(msg.id)!(msg)
+            this.waiting.delete(msg.id)
+          } else this.onEvent(msg)
+        } catch (e: any) {
+          console.error('[pi] event failed:', e?.stack ?? e)
+        }
       }
     })
     this.proc.stderr!.on('data', (d) => {
@@ -521,7 +526,7 @@ export class PiView {
         else if (a.type === 'thinking_start') this.log.applyStreamEvent({ type: 'content_block_start', index, content_block: { type: 'thinking' } })
         else if (a.type === 'toolcall_start') {
           const call = a.partial?.content?.[index] ?? {}
-          this.log.applyStreamEvent({ type: 'content_block_start', index, content_block: { type: 'tool_use', id: call.id, name: toolName(call.name, call.arguments) } })
+          this.log.applyStreamEvent({ type: 'content_block_start', index, content_block: { type: 'tool_use', id: call.id, name: call.name ? toolName(call.name, call.arguments) : '' } })
         } else if (a.type === 'text_delta') this.log.applyStreamEvent({ type: 'content_block_delta', index, delta: { type: 'text_delta', text: a.delta } })
         else if (a.type === 'thinking_delta') this.log.applyStreamEvent({ type: 'content_block_delta', index, delta: { type: 'thinking_delta', thinking: a.delta } })
         this.soon()

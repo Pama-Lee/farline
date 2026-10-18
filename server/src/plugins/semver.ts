@@ -1,8 +1,19 @@
 // Just enough semver for "engines.farline" ranges: >=, >, <=, <, =, ^, ~,
 // x wildcards, space for AND and || for OR.
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
-export const FARLINE_VERSION: string = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version
+// server/package.json from source; the package's own when bundled for npm.
+function version(): string {
+  for (const rel of ['../../package.json', '../package.json']) {
+    const url = new URL(rel, import.meta.url)
+    if (!existsSync(url)) continue
+    const pkg = JSON.parse(readFileSync(url, 'utf8'))
+    if (/^farline/.test(pkg.name ?? '')) return pkg.version
+  }
+  return '0.0.0'
+}
+
+export const FARLINE_VERSION: string = version()
 
 type V = [number, number, number]
 

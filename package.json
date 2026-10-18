@@ -1,0 +1,11 @@
+{
+  "name": "farline-repo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:npm": "node scripts/build-npm.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

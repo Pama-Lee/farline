@@ -236,7 +236,7 @@ export class ItemLog {
       if (b.type === 'tool_use') {
         list.push(b.id)
         this.blockIds.set(ev.index, b.id)
-        if (b.name !== 'AskUserQuestion' && !isHiddenTool(b.name) && !this.get(b.id)) this.upsert({ kind: 'tool', id: b.id, name: b.name, input: {}, status: 'running' })
+        if (b.id && b.name !== 'AskUserQuestion' && !isHiddenTool(b.name) && !this.get(b.id)) this.upsert({ kind: 'tool', id: b.id, name: b.name, input: {}, status: 'running' })
       } else if (b.type === 'text' || b.type === 'thinking') {
         const id = `draft:${this.streamMsgId}:${ev.index}`
         list.push(id)

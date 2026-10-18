@@ -17,7 +17,9 @@ const LOCAL_BIN = join(HOME, '.local/bin')
 const NPM = existsSync(join(dirname(process.execPath), 'npm')) ? join(dirname(process.execPath), 'npm') : 'npm'
 const INSTALL: Record<Id, string> = {
   claude: 'curl -fsSL https://claude.ai/install.sh | bash',
-  pi: `"${NPM}" install -g --prefix "${join(HOME, '.local')}" @mariozechner/pi-coding-agent`,
+  // pi moved from @mariozechner to @earendil-works; drop the old package first,
+  // or its `pi` command blocks the new one.
+  pi: `"${NPM}" uninstall -g --prefix "${join(HOME, '.local')}" @mariozechner/pi-coding-agent >/dev/null 2>&1; "${NPM}" install -g --prefix "${join(HOME, '.local')}" @earendil-works/pi-coding-agent`,
 }
 const NAMES: Record<Id, string> = { claude: 'Claude Code', pi: 'pi' }
 const HOMEPAGES: Record<Id, string> = { claude: 'https://claude.com/claude-code', pi: 'https://pi.dev' }

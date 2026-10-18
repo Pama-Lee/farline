@@ -28,12 +28,12 @@ export function agentTool(name: string): AgentToolDefinition | undefined {
 }
 
 // Tool names as the agents see them: farline_x (pi), mcp__farline__x (Claude Code).
-export function agentToolFromCall(called: string): AgentToolDefinition | undefined {
-  const m = called.match(/^(?:mcp__farline__|farline_)(.+)$/)
+export function agentToolFromCall(called: string | undefined): AgentToolDefinition | undefined {
+  const m = called?.match(/^(?:mcp__farline__|farline_)(.+)$/)
   return m ? agentTool(m[1]) : undefined
 }
 
-export function isHiddenTool(called: string) {
+export function isHiddenTool(called: string | undefined) {
   return !!agentToolFromCall(called)?.hidden
 }
 

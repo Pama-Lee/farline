@@ -4,7 +4,7 @@ import { Check, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { ModelOption } from '../../../shared/types.ts'
 import { Popover } from '../components/Popover.tsx'
-import { EFFORT_LABELS, EFFORT_ORDER, isCurrent, type ModelPickerProps } from './ModelSheet.tsx'
+import { EFFORT_LABELS, EFFORT_ORDER, isCurrent, pickable, type ModelPickerProps } from './ModelSheet.tsx'
 import { t } from '../i18n.ts'
 
 export function wantsMenuPicker() {
@@ -15,7 +15,7 @@ export function ModelMenu(p: ModelPickerProps & { anchor: DOMRect }) {
   const [view, setView] = useState<'main' | 'model' | 'effort' | 'classifier'>('main')
   const [q, setQ] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
-  const available = p.providers.filter((pv) => p.models.some((m) => m.provider === pv.id))
+  const available = pickable(p)
   const current = p.models.find((m) => isCurrent(m, p.provider, p.model))
   const classifiers = (p.providers.find((pv) => pv.id === p.provider)?.classifierModels ?? [])
     .map((v) => p.models.find((m) => m.provider === p.provider && m.value === v))

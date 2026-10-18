@@ -19,6 +19,20 @@ export interface ModelPickerProps {
   onEffort: (e: EffortLevel) => void
   onClassifier: (model: string) => void
   onClose: () => void
+  // A started session keeps its agent: offer only that agent's models.
+  lockAgent?: boolean
+}
+
+export type AgentId = 'claude' | 'pi'
+export const agentOf = (provider: string): AgentId => (provider.startsWith('pi:') ? 'pi' : 'claude')
+export const AGENT_NAMES: Record<AgentId, string> = { claude: 'Claude Code', pi: 'pi' }
+// "pi · OpenRouter" reads "OpenRouter" once the agent is chosen.
+export const shortLabel = (label: string) => label.replace(/^pi · /, '')
+
+// Providers that have models, limited to the current agent when it is locked.
+export function pickable(p: ModelPickerProps) {
+  const agent = agentOf(p.provider)
+  return p.providers.filter((pv) => p.models.some((m) => m.provider === pv.id) && (!p.lockAgent || agentOf(pv.id) === agent))
 }
 
 export function isCurrent(m: ModelOption, provider: Provider, model: string) {
@@ -28,7 +42,14 @@ export function isCurrent(m: ModelOption, provider: Provider, model: string) {
 export function ModelSheet(p: ModelPickerProps) {
   const [tab, setTab] = useState<Provider>(p.provider)
   const [view, setView] = useState<'main' | 'effort' | 'more' | 'classifier'>('main')
-  const available = p.providers.filter((pv) => p.models.some((m) => m.provider === pv.id))
+  const all = pickable(p)
+  const agents = (['claude', 'pi'] as AgentId[]).filter((a) => all.some((pv) => agentOf(pv.id) === a))
+  const agent = agentOf(tab)
+  const available = all.filter((pv) => agentOf(pv.id) === agent)
+  const pickAgent = (a: AgentId) => {
+    if (a === agent) return
+    setTab(agentOf(p.provider) === a ? p.provider : (all.find((pv) => agentOf(pv.id) === a)?.id ?? tab))
+  }
   const inTab = p.models.filter((m) => m.provider === tab)
   const main = inTab.filter((m) => !m.more)
   const more = inTab.filter((m) => m.more)
@@ -107,11 +128,20 @@ export function ModelSheet(p: ModelPickerProps) {
 
   return (
     <Sheet title={t('model.choose')} onClose={p.onClose}>
-      {available.length > 1 && (
+      {agents.length > 1 && (
         <div className="segmented">
+          {agents.map((a) => (
+            <button key={a} className={agent === a ? 'on' : undefined} onClick={() => pickAgent(a)}>
+              {AGENT_NAMES[a]}
+            </button>
+          ))}
+        </div>
+      )}
+      {available.length > 1 && (
+        <div className="provider-chips">
           {available.map((pv) => (
             <button key={pv.id} className={tab === pv.id ? 'on' : undefined} onClick={() => setTab(pv.id)}>
-              {pv.label}
+              {shortLabel(pv.label)}
             </button>
           ))}
         </div>

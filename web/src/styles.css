@@ -3242,3 +3242,32 @@ a.option {
   flex: 1;
   min-width: 0;
 }
+
+.provider-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 12px;
+  margin-top: -2px;
+  scrollbar-width: none;
+}
+
+.provider-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.provider-chips button {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 17px;
+  background: var(--fill);
+  color: var(--text-2);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.provider-chips button.on {
+  background: var(--black);
+  color: var(--bg);
+}

@@ -947,6 +947,7 @@ function Composer(p: {
       {menuAt && (
         <ModelMenu
           anchor={menuAt}
+          lockAgent={!!p.sessionId}
           models={p.models}
           providers={p.providers}
           provider={p.provider}
@@ -961,6 +962,7 @@ function Composer(p: {
       )}
       {sheet === 'model' && (
         <ModelSheet
+          lockAgent={!!p.sessionId}
           models={p.models}
           providers={p.providers}
           provider={p.provider}

@@ -27,6 +27,7 @@ import { loadUpload } from './uploads.ts'
 import type { BackgroundTask, Catalog, EffortLevel, Item, McpServer, ModelOption, Patch, PermissionMode, Provider, ProviderInfo, SessionSnapshot, SessionState, SessionStatus, TaskOutput } from '../../shared/types.ts'
 import { t, tx } from './i18n.ts'
 import type { MessageKey } from '../../shared/i18n/index.ts'
+import { createPiView, isPiProvider, isPiSession, openPiView, piCatalog, PI_PREFIX, type PiView } from './pi.ts'
 
 const SNAPSHOT_ITEMS = 400
 
@@ -54,7 +55,15 @@ function readyProviders() {
   })
 }
 
+// Claude Code is a runtime like pi: without it, neither Claude nor the
+// providers that run through it are offered.
+export function claudeAvailable() {
+  return existsSync(config.claudePath)
+}
+
 export function catalog(): Catalog {
+  const pi = piCatalog()
+  if (!claudeAvailable()) return { providers: [...pi.providers], models: [...pi.models] }
   const providers: ProviderInfo[] = [{ id: 'claude', label: 'Claude' }]
   const models: ModelOption[] = claudeModels.map((m) => (MAIN[m.value] ? { ...m, desc: t(MAIN[m.value].desc) } : m))
   for (const p of readyProviders()) {
@@ -68,7 +77,7 @@ export function catalog(): Catalog {
     providers.push({ id: p.id, label: tx(p.label), classifierModels: p.classifierModels, defaultPermissionMode: p.defaultPermissionMode })
     models.push(...list)
   }
-  return { providers, models }
+  return { providers: [...providers, ...pi.providers], models: [...models, ...pi.models] }
 }
 
 export function models(): ModelOption[] {
@@ -76,10 +85,11 @@ export function models(): ModelOption[] {
 }
 
 export function providerReady(id: Provider): boolean {
-  return id === 'claude' || catalog().providers.some((p) => p.id === id)
+  return (id === 'claude' && claudeAvailable()) || catalog().providers.some((p) => p.id === id)
 }
 
 export function providerLabel(id: Provider): string {
+  if (isPiProvider(id)) return piCatalog().providers.find((p) => p.id === id)?.label ?? `pi · ${id.slice(PI_PREFIX.length)}`
   const p = id === 'claude' ? undefined : pluginProvider(id)
   return id === 'claude' ? 'Claude' : p ? tx(p.label) : id
 }
@@ -804,7 +814,9 @@ function parentOf(sessionId: string, uuid: string): string | null | undefined {
 
 // ---- registry ----
 
-const views = new Map<string, SessionView>()
+// Claude Code sessions and pi sessions, behind the same interface.
+export type AnyView = SessionView | PiView
+const views = new Map<string, AnyView>()
 
 export function liveViews() {
   return [...views.values()].filter((v) => v.live)
@@ -826,11 +838,16 @@ function metaFor(id: string): SessionMeta {
   }
 }
 
-export async function openView(id: string): Promise<SessionView | undefined> {
+export async function openView(id: string): Promise<AnyView | undefined> {
   const existing = views.get(id)
   if (existing) {
     existing.lastActive = Date.now()
     return existing
+  }
+  if (isPiSession(id)) {
+    const pv = openPiView(id, state.sessions[id] ?? { provider: PI_PREFIX, model: '', permissionMode: 'bypassPermissions' })
+    if (pv) views.set(id, pv)
+    return pv
   }
   const info = await getSessionInfo(id)
   if (!info) return undefined
@@ -854,9 +871,9 @@ export async function openView(id: string): Promise<SessionView | undefined> {
   return view
 }
 
-export function createView(cwd: string, meta: SessionMeta, title: string): SessionView {
-  const id = randomUUID()
-  const view = new SessionView(id, cwd, meta, false)
+export function createView(cwd: string, meta: SessionMeta, title: string): AnyView {
+  const view = isPiProvider(meta.provider) ? createPiView(cwd, meta, title) : new SessionView(randomUUID(), cwd, meta, false)
+  const id = view.id
   view.title = title
   state.sessions[id] = { ...meta }
   save()
@@ -865,7 +882,7 @@ export function createView(cwd: string, meta: SessionMeta, title: string): Sessi
   return view
 }
 
-function makeRoomForLive(except: SessionView) {
+function makeRoomForLive(except: AnyView) {
   const live = liveViews().filter((v) => v !== except)
   if (live.length < config.maxLive) return
   const idle = live.filter((v) => v.status === 'idle' && v.runningTasks === 0 && v.subscribers.size === 0).sort((a, b) => a.lastActive - b.lastActive)

@@ -73,6 +73,11 @@ export default {
           // V4 Pro and V4.1 Flash both take 1M tokens.
           contextWindow: 1_000_000,
         }),
+      pi: () => ({
+        baseUrl: `${BASE}/anthropic`,
+        apiKey: key(),
+        models: MODELS.map((m) => ({ id: m.value, name: m.label, contextWindow: 1_000_000 })),
+      }),
     })
   },
 } satisfies PluginDefinition

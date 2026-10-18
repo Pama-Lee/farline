@@ -17,11 +17,14 @@ import { SidebarResizer } from './components/SidebarResizer.tsx'
 import { useSidebarLayout } from './lib/prefs.ts'
 import { PanelLeftOpen } from 'lucide-react'
 import { t, useLocale } from './i18n.ts'
+import { Onboarding } from './screens/Onboarding.tsx'
 
 export function App() {
   // Everything below reads the language at render time.
   useLocale()
   const [authed, setAuthed] = useState<boolean | null>(null)
+  const [needsSetup, setNeedsSetup] = useState(false)
+  const [onboarding, setOnboarding] = useState(false)
   const [device, setDevice] = useState<DeviceInfo | null>(null)
   const [catalog, setCatalog] = useState<Catalog>({ providers: [], models: [] })
   const route = useRoute()
@@ -57,12 +60,14 @@ export function App() {
 
   const boot = useCallback(async () => {
     try {
-      const { authed } = await api.me()
+      const { authed, needsSetup } = await api.me()
+      setNeedsSetup(needsSetup)
       setAuthed(authed)
       if (!authed) return
-      const [d, c, plugins] = await Promise.all([api.device(), api.catalog(), api.plugins()])
+      const [d, c, plugins, ag] = await Promise.all([api.device(), api.catalog(), api.plugins(), api.agents()])
       setDevice(d)
       setCatalog(c)
+      setOnboarding(!ag.onboarded)
       void syncPlugins(plugins)
     } catch {
       setAuthed((a) => a ?? false)
@@ -96,7 +101,8 @@ export function App() {
         <Spinner />
       </div>
     )
-  else if (!authed) body = <Login onDone={boot} />
+  else if (!authed) body = <Login onDone={boot} setup={needsSetup} />
+  else if (onboarding) body = <Onboarding onDone={() => setOnboarding(false)} />
   else if (desktop) {
     // Desktop: sidebar + thread. With nothing selected the pane is a new session.
     const main =

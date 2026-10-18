@@ -101,6 +101,15 @@ export interface ProviderDefinition {
   defaultPermissionMode?: PermissionMode
   // Extra environment for the agent process of a session.
   env(session: { model: string; classifierModel?: string }): Record<string, string>
+  // The same models for pi sessions, as an Anthropic-compatible endpoint
+  // (base URL without /v1). Leave out to keep the provider Claude Code only.
+  pi?(): PiEndpoint | undefined
+}
+
+export interface PiEndpoint {
+  baseUrl: string
+  apiKey: string
+  models: { id: string; name?: string; contextWindow?: number; reasoning?: boolean }[]
 }
 
 export interface AnthropicCompatibleOptions {

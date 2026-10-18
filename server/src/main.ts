@@ -5,9 +5,11 @@ import { getSessionMessages, listSessions } from '@anthropic-ai/claude-agent-sdk
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { sessionActivity } from './activity.ts'
-import { isAuthed, login, logout, requireAuth, setPassword } from './auth.ts'
+import { isAuthed, login, logout, MIN_PASSWORD, needsSetup, requireAuth, setPassword, setup, setupCode } from './auth.ts'
 import { config, underFsRoot } from './config.ts'
-import { allViews, cachedView, catalog, createView, defaultModel, models, openView, providerLabel, providerReady, warmModels } from './live.ts'
+import { allViews, cachedView, catalog, claudeAvailable, createView, defaultModel, models, openView, providerLabel, providerReady, warmModels } from './live.ts'
+import { invalidatePiModels, isPiProvider, listPiSessions, warmPiModels } from './pi.ts'
+import { agents, agentStatus, install } from './agents.ts'
 import { existsFile, readPath, resolvePaths } from './files.ts'
 import { noteOrigin } from './origin.ts'
 import { getPlugin, listPlugins, loadPlugins, pluginAsset, pluginFetch, pluginInfo, pluginStatus, remoteOf, saveSettings, setEnabled, testNotification, uninstall } from './plugins/host.ts'
@@ -22,7 +24,7 @@ import { localeMiddleware, t } from './i18n.ts'
 
 if (process.argv[2] === 'set-password') {
   const pw = process.argv[3]
-  if (!pw || pw.length < 12) throw new Error('password must be at least 12 characters')
+  if (!pw || pw.length < MIN_PASSWORD) throw new Error(`password must be at least ${MIN_PASSWORD} characters`)
   setPassword(pw)
   console.log('password updated')
   process.exit(0)
@@ -37,7 +39,8 @@ app.use('/api/*', localeMiddleware)
 
 app.post('/api/login', login)
 app.post('/api/logout', logout)
-app.get('/api/me', (c) => c.json({ authed: isAuthed(c) }))
+app.get('/api/me', (c) => c.json({ authed: isAuthed(c), needsSetup: needsSetup() }))
+app.post('/api/setup', setup)
 
 const api = new Hono()
 api.use('*', requireAuth)
@@ -53,6 +56,26 @@ api.get('/device', (c) => {
 })
 
 api.get('/models', (c) => c.json(catalog()))
+
+// ---- agents (Claude Code, pi) ----
+
+api.get('/agents', (c) => c.json({ agents: agents(c.req.query('fresh') === '1'), models: catalog().models.length, onboarded: !!state.prefs.onboarded }))
+
+api.post('/agents/:id/install', (c) => {
+  const id = c.req.param('id')
+  if (id !== 'claude' && id !== 'pi') return c.json({ error: 'not found' }, 404)
+  install(id, () => {
+    if (id === 'claude') warmModels().catch(() => undefined)
+    else warmPiModels().catch(() => undefined)
+  })
+  return c.json(agentStatus(id))
+})
+
+api.post('/onboarded', (c) => {
+  state.prefs.onboarded = true
+  save()
+  return c.json({ ok: true })
+})
 
 // ---- plugins ----
 
@@ -111,6 +134,16 @@ api.delete('/plugins/:id', async (c) => {
 api.get('/plugins/:id/status', async (c) => {
   const p = getPlugin(c.req.param('id'))
   return p ? c.json(await pluginStatus(p)) : c.json({ error: 'not found' }, 404)
+})
+
+// Providers shared with pi may have changed: ask pi for its models again.
+api.use('/plugins/*', async (c, next) => {
+  await next()
+  if (c.req.method !== 'GET') invalidatePiModels()
+})
+api.use('/ext/*', async (c, next) => {
+  await next()
+  if (c.req.method !== 'GET') invalidatePiModels()
 })
 
 api.put('/plugins/:id/enabled', async (c) => {
@@ -197,6 +230,24 @@ api.get('/sessions', async (c) => {
       ...(view?.runningTasks ? { tasks: view.runningTasks } : {}),
     })
   }
+  for (const info of listPiSessions()) {
+    seen.add(info.id)
+    const meta = state.sessions[info.id]
+    if (meta?.hidden) continue
+    const view = cachedView(info.id)
+    const title = view?.title || meta?.title || state.titles[info.id]
+    const provider = meta?.provider ?? `pi:${info.provider ?? ''}`
+    rows.push({
+      id: info.id,
+      title: title ?? '',
+      firstPrompt: title ? undefined : info.firstPrompt,
+      cwd: info.cwd,
+      updatedAt: Math.max(info.lastModified, view?.live ? view.lastActive : 0),
+      status: view ? view.sessionState().status : 'idle',
+      provider,
+      providerLabel: 'pi',
+    })
+  }
   // Started here moments ago, transcript not on disk yet.
   for (const v of allViews()) {
     if (seen.has(v.id) || v.meta.hidden || !v.live) continue
@@ -208,7 +259,7 @@ api.get('/sessions', async (c) => {
       updatedAt: v.lastActive,
       status: st.status,
       provider: st.provider,
-      ...(st.provider !== 'claude' ? { providerLabel: providerLabel(st.provider) } : {}),
+      ...(st.provider !== 'claude' ? { providerLabel: isPiProvider(st.provider) ? 'pi' : providerLabel(st.provider) } : {}),
       ...(v.runningTasks ? { tasks: v.runningTasks } : {}),
     })
   }
@@ -526,9 +577,18 @@ app.get('*', (c) => {
 
 await loadPlugins()
 
+// Installs from before the setup page: already set up, skip it.
+if (state.prefs.onboarded === undefined && !needsSetup()) {
+  state.prefs.onboarded = true
+  save()
+}
+
 serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
   console.log(`farline listening on http://${info.address}:${info.port}`)
-  warmModels().catch((e) => console.error('model list failed', e?.message))
+  const code = setupCode()
+  if (code) console.log(`\n  First run: open Farline in a browser and enter this setup code to choose a password:\n\n      ${code}\n\n  (also saved in ${config.dataDir}/setup-code)\n`)
+  if (claudeAvailable()) warmModels().catch((e) => console.error('model list failed', e?.message))
+  warmPiModels().catch(() => undefined)
 })
 
 process.on('SIGTERM', () => process.exit(0))

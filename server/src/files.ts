@@ -27,7 +27,7 @@ function kindOf(p: string): 'file' | 'dir' | null {
 
 // Absolute paths a session has touched or mentioned, newest first: tool
 // inputs (file_path, path), `cd` targets and absolute paths in commands.
-function sessionPaths(view: SessionView): string[] {
+function sessionPaths(view: Pick<SessionView, 'log' | 'cwd'>): string[] {
   const out: string[] = []
   const items = view.log.items
   for (let i = items.length - 1; i >= 0 && out.length < 400; i--) {
@@ -56,7 +56,7 @@ function splitLine(raw: string): { path: string; line?: number } {
   return { path: m[1], line: Number(m[2] ?? m[3]) }
 }
 
-export function resolvePaths(raws: string[], opts: { view?: SessionView; base?: string; cwd?: string }): Record<string, ResolvedPath | null> {
+export function resolvePaths(raws: string[], opts: { view?: Pick<SessionView, 'log' | 'cwd'>; base?: string; cwd?: string }): Record<string, ResolvedPath | null> {
   const known = opts.view ? sessionPaths(opts.view) : []
   const cwd = opts.view?.cwd ?? opts.cwd
   // Directories to try relative paths against: the given base, where the

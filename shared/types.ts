@@ -240,6 +240,20 @@ export interface PluginStatus {
   rows?: { label: string; value: string; tone?: 'danger' }[]
 }
 
+// An agent runtime Farline can drive.
+export interface AgentStatus {
+  id: 'claude' | 'pi'
+  name: string
+  homepage: string
+  installed: boolean
+  version?: string
+  path?: string
+  installing: boolean
+  // Output of the running or last install.
+  log: string
+  error?: string
+}
+
 export interface RemoteSource {
   repo: string
   ref?: string

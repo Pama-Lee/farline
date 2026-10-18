@@ -12,6 +12,10 @@ export const config = {
   defaultCwd: env.FARLINE_DEFAULT_CWD ?? homedir(),
   fsRoot: resolve(env.FARLINE_FS_ROOT ?? '/'),
   claudePath: env.FARLINE_CLAUDE_PATH ?? join(homedir(), '.local/bin/claude'),
+  // pi (pi.dev); found on PATH when not set.
+  piPath: env.FARLINE_PI_PATH ?? '',
+  // Where pi keeps its settings and sessions.
+  piAgentDir: env.PI_CODING_AGENT_DIR ?? join(homedir(), '.pi/agent'),
   deviceName: env.FARLINE_DEVICE_NAME ?? hostname(),
   // Plugins shipped with Farline; user plugins live in <dataDir>/plugins.
   builtinPluginsDir: env.FARLINE_BUILTIN_PLUGINS ?? new URL('../../plugins', import.meta.url).pathname,

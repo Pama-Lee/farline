@@ -72,6 +72,7 @@ export default {
             label: e.name,
             available: () => !!(e.baseUrl && e.apiKey && e.models.length),
             models: () => e.models.map((value) => ({ value, label: value })),
+            pi: () => ({ baseUrl: e.baseUrl, apiKey: e.apiKey, models: e.models.map((id) => ({ id, contextWindow: e.contextWindow })) }),
             env: ({ model }) =>
               ctx.helpers.anthropicCompatible({
                 baseUrl: e.baseUrl,

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, Check, ChevronRight, Compass, Download, Languages, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
+import { ArrowUpRight, Bell, Check, ChevronRight, Compass, Download, Languages, Terminal, ListTree, LogOut, Palette, Puzzle } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import type { MarketPlugin, PluginInfo, PluginStatus, SettingFieldView } from '../../../shared/types.ts'
 import { Sheet } from '../components/Sheet.tsx'
@@ -9,8 +9,9 @@ import { PluginBoundary, syncPlugins, usePlugins } from '../plugins/runtime.tsx'
 import { setStepsView, useStepsView, type StepsView } from '../lib/prefs.ts'
 import { LOCALES } from '../../../shared/i18n/index.ts'
 import { labelMap, langPref, setLangPref, t, type MessageKey } from '../i18n.ts'
+import { AgentsPanel, useAgents } from '../screens/Onboarding.tsx'
 
-type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'market' } | { name: 'skins' } | { name: 'steps' } | { name: 'language' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
+type View = { name: 'main' } | { name: 'plugins' } | { name: 'install' } | { name: 'market' } | { name: 'skins' } | { name: 'steps' } | { name: 'language' } | { name: 'agents' } | { name: 'plugin'; id: string; back: 'main' | 'plugins' }
 
 const STEPS_VIEWS: { id: StepsView; label: MessageKey }[] = [
   { id: 'auto', label: 'common.auto' },
@@ -144,6 +145,8 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
         </div>
       </Sheet>
     )
+
+  if (view.name === 'agents') return <AgentsView onClose={onClose} onBack={() => setView({ name: 'main' })} />
 
   if (view.name === 'language')
     return (
@@ -280,6 +283,11 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
           <span className="value">{activeSkin?.name ?? t('common.default')}</span>
         </button>
       )}
+      <button className="row-btn" onClick={() => setView({ name: 'agents' })}>
+        <Terminal size={19} strokeWidth={1.6} />
+        <span className="grow">{t('agents.title')}</span>
+        <ChevronRight size={18} color="var(--text-3)" />
+      </button>
       <button className="row-btn" onClick={() => setView({ name: 'language' })}>
         <Languages size={19} strokeWidth={1.6} />
         <span className="grow">{t('settings.language')}</span>
@@ -305,6 +313,15 @@ export function SettingsSheet({ onClose, onLogout }: { onClose: () => void; onLo
         <LogOut size={19} strokeWidth={1.6} />
         <span className="grow">{t('settings.signOut')}</span>
       </button>
+    </Sheet>
+  )
+}
+
+function AgentsView({ onClose, onBack }: { onClose: () => void; onBack: () => void }) {
+  const agents = useAgents()
+  return (
+    <Sheet title={t('agents.title')} onClose={onClose} onBack={onBack} size="tall">
+      <AgentsPanel {...agents} />
     </Sheet>
   )
 }

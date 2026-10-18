@@ -33,7 +33,11 @@ export function RewindSheet({ sessionId, cwd, messageId, text, onClose }: { sess
     try {
       const r = await api.rewind(sessionId, { messageId, files, conversation })
       if (conversation) {
-        if (r.restart) {
+        if (r.sessionId) {
+          // pi rewinds into a new session.
+          setDraft(r.sessionId, text)
+          navigate(`/s/${r.sessionId}`)
+        } else if (r.restart) {
           setDraft(null, text)
           navigate(`/new?cwd=${encodeURIComponent(cwd)}`)
         } else setDraft(sessionId, text)

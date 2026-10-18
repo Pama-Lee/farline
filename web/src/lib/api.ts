@@ -5,6 +5,7 @@ import type {
   DirListing,
   FileRead,
   McpServer,
+  AgentStatus,
   MarketPlugin,
   PluginInfo,
   PluginStatus,
@@ -64,7 +65,11 @@ export interface RewindPreview {
 }
 
 export const api = {
-  me: () => req<{ authed: boolean }>('GET', '/me'),
+  me: () => req<{ authed: boolean; needsSetup: boolean }>('GET', '/me'),
+  setup: (code: string, password: string) => req<{ ok: true }>('POST', '/setup', { code, password }),
+  agents: (fresh = false) => req<{ agents: AgentStatus[]; models: number; onboarded: boolean }>('GET', `/agents${fresh ? '?fresh=1' : ''}`),
+  installAgent: (id: AgentStatus['id']) => req<AgentStatus>('POST', `/agents/${id}/install`),
+  finishOnboarding: () => req<{ ok: true }>('POST', '/onboarded'),
   login: (password: string) => req<{ ok: true }>('POST', '/login', { password }),
   logout: () => req<{ ok: true }>('POST', '/logout'),
   device: () => req<DeviceInfo>('GET', '/device'),
@@ -92,7 +97,7 @@ export const api = {
   stopTask: (id: string, taskId: string) => req<{ ok: true }>('POST', `/sessions/${id}/tasks/${taskId}/stop`),
   editText: (id: string, itemId: string, text: string) => req<{ ok: true }>('PUT', `/sessions/${id}/items/${encodeURIComponent(itemId)}/text`, { text }),
   rewindPreview: (id: string, messageId: string) => req<RewindPreview>('GET', `/sessions/${id}/rewind/${messageId}`),
-  rewind: (id: string, body: { messageId: string; files: boolean; conversation: boolean }) => req<{ restart?: boolean }>('POST', `/sessions/${id}/rewind`, body),
+  rewind: (id: string, body: { messageId: string; files: boolean; conversation: boolean }) => req<{ restart?: boolean; sessionId?: string }>('POST', `/sessions/${id}/rewind`, body),
   backgroundTool: (id: string, toolUseId: string) => req<{ ok: boolean }>('POST', `/sessions/${id}/background`, { toolUseId }),
   readFile: (path: string) => req<FileRead>('GET', `/fs/read?path=${encodeURIComponent(path)}`),
   dirs: (path?: string, hidden = false) => req<DirListing>('GET', `/fs?${new URLSearchParams({ ...(path ? { path } : {}), ...(hidden ? { hidden: '1' } : {}) })}`),

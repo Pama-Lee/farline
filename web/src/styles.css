@@ -3245,15 +3245,10 @@ a.option {
 
 .provider-chips {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 2px 0 12px;
   margin-top: -2px;
-  scrollbar-width: none;
-}
-
-.provider-chips::-webkit-scrollbar {
-  display: none;
 }
 
 .provider-chips button {

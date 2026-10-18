@@ -3174,3 +3174,71 @@ a.option {
   color: var(--text-2);
   font-size: 14.5px;
 }
+
+/* ---------- reactions ---------- */
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.msg-user .reactions {
+  justify-content: flex-end;
+}
+
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border-radius: 15px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+.reaction .e {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.reaction.agent {
+  border-color: var(--text-3);
+}
+
+.reaction.mine {
+  background: var(--fill);
+}
+
+.emoji-row {
+  display: flex;
+  gap: 2px;
+  padding: 6px;
+}
+
+.emoji-row button {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 22px;
+  display: grid;
+  place-items: center;
+}
+
+.emoji-row button:hover {
+  background: var(--fill);
+}
+
+.popover:has(.emoji-row) {
+  border-radius: 26px;
+}
+
+.agent-head .grow,
+.source .grow {
+  flex: 1;
+  min-width: 0;
+}

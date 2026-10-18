@@ -95,6 +95,7 @@ export const api = {
   mcp: (id: string) => req<McpServer[]>('GET', `/sessions/${id}/mcp`),
   taskOutput: (id: string, taskId: string) => req<TaskOutput>('GET', `/sessions/${id}/tasks/${taskId}/output`),
   stopTask: (id: string, taskId: string) => req<{ ok: true }>('POST', `/sessions/${id}/tasks/${taskId}/stop`),
+  react: (id: string, itemId: string, emoji: string) => req<{ ok: true }>('PUT', `/sessions/${id}/items/${encodeURIComponent(itemId)}/reactions`, { emoji }),
   editText: (id: string, itemId: string, text: string) => req<{ ok: true }>('PUT', `/sessions/${id}/items/${encodeURIComponent(itemId)}/text`, { text }),
   rewindPreview: (id: string, messageId: string) => req<RewindPreview>('GET', `/sessions/${id}/rewind/${messageId}`),
   rewind: (id: string, body: { messageId: string; files: boolean; conversation: boolean }) => req<{ restart?: boolean; sessionId?: string }>('POST', `/sessions/${id}/rewind`, body),

@@ -26,6 +26,7 @@ import { useInlineSteps } from '../lib/prefs.ts'
 import { TaskIcon, TasksSheet } from '../sheets/TasksSheet.tsx'
 import { collectTasks, type TaskView } from '../lib/tasks.ts'
 import { t, tx } from '../i18n.ts'
+import { ReactButton, ReactionPills } from '../components/Reactions.tsx'
 
 interface Props {
   id: string | null
@@ -56,6 +57,7 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
   const [stepsId, setStepsId] = useState<string | null>(null)
   const [rewindAt, setRewindAt] = useState<{ id: string; text: string } | null>(null)
   const [editing, setEditing] = useState<{ id: string; select?: string } | null>(null)
+  const canReact = usePlugins().active.includes('reactions')
   const [menu, setMenu] = useState(false)
   // Background tasks sheet, optionally opened on one task.
   const [taskSheet, setTaskSheet] = useState<{ openId: string | null } | null>(null)
@@ -203,6 +205,8 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                   <UserMsg
                     key={b.item.id}
                     item={b.item}
+                    sessionId={id}
+                    canReact={canReact}
                     onRewind={
                       id && !busy
                         ? () => setRewindAt({ id: b.item.id, text: b.item.text })
@@ -222,8 +226,9 @@ export function SessionScreen({ id, newCwd, device, catalog }: Props) {
                   <div className="msg-text" key={b.item.id} data-item={editable ? b.item.id : undefined}>
                     <Markdown text={b.item.text} />
                     {b.item.edited && <div className="edited-tag">{t('session.edited')}</div>}
+                    <ReactionPills reactions={b.item.reactions} sessionId={id} itemId={b.item.id} />
                     {b.last && !b.item.streaming && !(busy && i === blocks.length - 1) && (
-                      <MsgActions text={b.item.text} onEdit={editable ? () => setEditing({ id: b.item.id }) : undefined} />
+                      <MsgActions text={b.item.text} onEdit={editable ? () => setEditing({ id: b.item.id }) : undefined} react={canReact && id ? { sessionId: id, itemId: b.item.id } : undefined} />
                     )}
                   </div>
                 )
@@ -475,7 +480,7 @@ function Thinking({ since }: { since?: number }) {
   )
 }
 
-function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; onRewind?: () => void }) {
+function UserMsg({ item, onRewind, sessionId, canReact }: { item: Extract<Item, { kind: 'user' }>; onRewind?: () => void; sessionId: string | null; canReact: boolean }) {
   const files = (item.files ?? []).filter((f) => !/\.(jpe?g|png|gif|webp|heic)$/i.test(f))
   // Touch screens: tap the bubble for its actions.
   const [shown, setShown] = useState(false)
@@ -500,7 +505,9 @@ function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; on
           {item.text}
         </div>
       )}
+      <ReactionPills reactions={item.reactions} sessionId={sessionId} itemId={item.id} />
       <div className="msg-actions user">
+        {canReact && sessionId && <ReactButton sessionId={sessionId} itemId={item.id} />}
         {item.text && (
           <button
             onClick={async () => {
@@ -523,7 +530,7 @@ function UserMsg({ item, onRewind }: { item: Extract<Item, { kind: 'user' }>; on
   )
 }
 
-function MsgActions({ text, onEdit }: { text: string; onEdit?: () => void }) {
+function MsgActions({ text, onEdit, react }: { text: string; onEdit?: () => void; react?: { sessionId: string; itemId: string } }) {
   const [speaking, setSpeaking] = useState(false)
   const speak = () => {
     const synth = window.speechSynthesis
@@ -554,6 +561,7 @@ function MsgActions({ text, onEdit }: { text: string; onEdit?: () => void }) {
       <button onClick={speak} aria-label={t('session.readAloud')}>
         {speaking ? <Square size={17} strokeWidth={1.7} /> : <Play size={17} strokeWidth={1.6} />}
       </button>
+      {react && <ReactButton sessionId={react.sessionId} itemId={react.itemId} size={17} />}
       {onEdit && (
         <button onClick={onEdit} aria-label={t('common.edit')} title={t('common.edit')}>
           <PencilLine size={17} strokeWidth={1.6} />

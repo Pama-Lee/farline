@@ -33,9 +33,11 @@ interface Snapshot {
   sessionActions: Action[]
   settingsPanels: Panel[]
   errors: Record<string, string>
+  // Ids of the plugins that are on, for features the page gates on them.
+  active: string[]
 }
 
-let snap: Snapshot = { toolRenderers: [], sessionActions: [], settingsPanels: [], errors: {} }
+let snap: Snapshot = { toolRenderers: [], sessionActions: [], settingsPanels: [], errors: {}, active: [] }
 const listeners = new Set<() => void>()
 
 function update(fn: (s: Snapshot) => Snapshot) {
@@ -203,6 +205,8 @@ export function preloadStyles() {
 
 // Bring loaded browser code in line with the server's plugin list.
 export async function syncPlugins(list: PluginInfo[]) {
+  const active = list.filter((p) => p.state === 'active').map((p) => p.id)
+  if (active.join() !== snap.active.join()) update((s) => ({ ...s, active }))
   const styles = list.filter((p) => p.styles).map((p) => ({ id: p.id, href: p.styles!, skin: !!p.skin }))
   localStorage.setItem(STYLES_KEY, JSON.stringify(styles))
   await applyStyles(styles)

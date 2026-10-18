@@ -1,6 +1,7 @@
 // Normalizes Claude Code messages (persisted transcript or live SDK stream)
 // into the flat Item list the web client renders.
 import type { Item, Patch, Question, TaskEndStatus } from '../../shared/types.ts'
+import { isHiddenTool } from './plugins/registry.ts'
 
 const RESULT_LIMIT = 16_000
 const END_STATUSES: TaskEndStatus[] = ['completed', 'failed', 'stopped']
@@ -111,6 +112,7 @@ export class ItemLog {
   }
 
   private applyToolUse(b: Block) {
+    if (isHiddenTool(b.name)) return
     const prev = this.get(b.id)
     if (b.name === 'AskUserQuestion') {
       const questions: Question[] = Array.isArray(b.input?.questions) ? b.input.questions : []
@@ -234,7 +236,7 @@ export class ItemLog {
       if (b.type === 'tool_use') {
         list.push(b.id)
         this.blockIds.set(ev.index, b.id)
-        if (b.name !== 'AskUserQuestion' && !this.get(b.id)) this.upsert({ kind: 'tool', id: b.id, name: b.name, input: {}, status: 'running' })
+        if (b.name !== 'AskUserQuestion' && !isHiddenTool(b.name) && !this.get(b.id)) this.upsert({ kind: 'tool', id: b.id, name: b.name, input: {}, status: 'running' })
       } else if (b.type === 'text' || b.type === 'thinking') {
         const id = `draft:${this.streamMsgId}:${ev.index}`
         list.push(id)

@@ -17,7 +17,7 @@ import { allViews, cachedView, openView } from '../live.ts'
 import { sendTo } from '../push.ts'
 import { anthropicCompatible } from './helpers.ts'
 import { FARLINE_VERSION, satisfies } from './semver.ts'
-import { addChannel, addHook, addProvider, allChannels, secretEnv } from './registry.ts'
+import { addAgentTool, addChannel, addHook, addProvider, allChannels, secretEnv } from './registry.ts'
 import type { Disposable, PluginContext, PluginDefinition, SettingField, SettingValues, StatusReport, Text } from './types.ts'
 import { currentLocale, t, tx } from '../i18n.ts'
 
@@ -240,7 +240,13 @@ function context(p: Plugin): PluginContext {
         if (!view) throw new Error(`no session ${sid}`)
         view.send(text)
       },
+      react: async (sid, messageId, emoji) => {
+        const view = await openView(sid)
+        if (!view) throw new Error(`no session ${sid}`)
+        view.react(messageId, emoji, 'agent')
+      },
     },
+    agentTools: { register: (def) => own(addAgentTool(id, def)) },
     helpers: { anthropicCompatible },
   }
 }

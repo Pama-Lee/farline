@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto'
 import { closeSync, existsSync, openSync, readFileSync, readSync, renameSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import {
+  createSdkMcpServer,
+  tool,
   getSessionInfo,
   getSessionMessages,
   query,
@@ -18,8 +20,8 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import { runningElsewhere, sessionFile } from './activity.ts'
 import { config, underFsRoot } from './config.ts'
-import { allProviders, emit, provider as pluginProvider, secretEnv } from './plugins/registry.ts'
-import type { SessionInfo } from './plugins/types.ts'
+import { agentInstructions, agentToolFromCall, allAgentTools, allProviders, emit, provider as pluginProvider, secretEnv } from './plugins/registry.ts'
+import type { AgentToolParam, SessionInfo } from './plugins/types.ts'
 import { notify } from './push.ts'
 import { save, state, type SessionMeta } from './store.ts'
 import { ItemLog } from './transcript.ts'
@@ -28,6 +30,8 @@ import type { BackgroundTask, Catalog, EffortLevel, Item, McpServer, ModelOption
 import { t, tx } from './i18n.ts'
 import type { MessageKey } from '../../shared/i18n/index.ts'
 import { createPiView, isPiProvider, isPiSession, openPiView, piCatalog, PI_PREFIX, type PiView } from './pi.ts'
+import { applyReaction, lastUserMessageId, restoreReactions } from './reactions.ts'
+import { z } from 'zod'
 
 const SNAPSHOT_ITEMS = 400
 
@@ -314,8 +318,9 @@ export class SessionView {
       perTaskStopAffordance: true,
       agentProgressSummaries: true,
       includePartialMessages: true,
-      systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, snapshot: true },
+      systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const, snapshot: true, ...(agentInstructions() ? { append: agentInstructions() } : {}) },
       canUseTool: this.canUseTool,
+      ...this.pluginTools(),
       enableFileCheckpointing: true,
       ...(this.persisted ? { resume: this.id } : { sessionId: this.id }),
       ...(this.persisted && this.meta.rewind ? { resumeSessionAt: this.meta.rewind.at } : {}),
@@ -694,6 +699,35 @@ export class SessionView {
     for (const it of this.log.items.slice(i)) this.log.remove(it.id)
   }
 
+  // Tools plugins give the agent, served in-process as the "farline" MCP server.
+  private pluginTools() {
+    const defs = allAgentTools()
+    if (!defs.length) return {}
+    const server = createSdkMcpServer({
+      name: 'farline',
+      version: '1.0.0',
+      // Never behind tool search: a reaction is only natural if it's at hand.
+      alwaysLoad: true,
+      tools: defs.map((def) =>
+        tool(def.name, def.description, zodShape(def.params), async (args: Record<string, unknown>) => {
+          try {
+            const text = await def.run(args, { session: this.info(), lastUserMessageId: lastUserMessageId(this.log) })
+            return { content: [{ type: 'text' as const, text: text || 'ok' }] }
+          } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: String(e?.message ?? e) }], isError: true }
+          }
+        }, { alwaysLoad: true }),
+      ),
+    })
+    return { mcpServers: { farline: server } }
+  }
+
+  react(itemId: string, emoji: string, by: 'agent' | 'user') {
+    if (!applyReaction(this, itemId, emoji, by)) return false
+    this.flushNow()
+    return true
+  }
+
   async mcpStatus(): Promise<McpServer[]> {
     if (this.q) {
       const list = await this.q.mcpServerStatus().catch(() => undefined)
@@ -718,6 +752,8 @@ export class SessionView {
     new Promise<PermissionResult>((resolve) => {
       const reqId = randomUUID()
       const itemId = opts.toolUseID
+      // Plugin tools are Farline's own; they never ask.
+      if (agentToolFromCall(toolName)) return resolve({ behavior: 'allow', updatedInput: input })
       if (toolName === 'AskUserQuestion') {
         const prev = this.log.get(itemId)
         const questions = Array.isArray((input as any).questions) ? (input as any).questions : []
@@ -812,6 +848,18 @@ function parentOf(sessionId: string, uuid: string): string | null | undefined {
   return undefined
 }
 
+// A plugin tool's parameters as the zod shape the SDK wants.
+function zodShape(params: Record<string, AgentToolParam>) {
+  const shape: Record<string, z.ZodTypeAny> = {}
+  for (const [k, p] of Object.entries(params)) {
+    let s: z.ZodTypeAny = p.type === 'number' ? z.number() : p.type === 'boolean' ? z.boolean() : p.enum?.length ? z.enum(p.enum as [string, ...string[]]) : z.string()
+    if (p.description) s = s.describe(p.description)
+    if (p.optional) s = s.optional()
+    shape[k] = s
+  }
+  return shape
+}
+
 // ---- registry ----
 
 // Claude Code sessions and pi sessions, behind the same interface.
@@ -862,6 +910,7 @@ export async function openView(id: string): Promise<AnyView | undefined> {
     if (m.type === 'assistant' && typeof model === 'string' && !(m as any).parent_tool_use_id && model !== '<synthetic>') view.model = model
   }
   if (meta.rewind) view.truncateAt(meta.rewind.from)
+  restoreReactions(view)
   for (const itemId of meta.edited ?? []) {
     const it = view.log.get(itemId)
     if (it?.kind === 'text') view.log.upsert({ ...it, edited: true })

@@ -1,6 +1,6 @@
 // What enabled plugins have registered. Kept free of other imports so the
 // session code can read providers and emit hooks without a cycle.
-import type { ChannelDefinition, Disposable, HookName, HookPayloads, ProviderDefinition } from './types.ts'
+import type { AgentToolDefinition, ChannelDefinition, Disposable, HookName, HookPayloads, ProviderDefinition } from './types.ts'
 
 interface Owned<T> {
   owner: string
@@ -10,6 +10,36 @@ interface Owned<T> {
 const providers = new Map<string, Owned<ProviderDefinition>>()
 const channels = new Set<Owned<ChannelDefinition>>()
 const hooks = new Map<HookName, Set<Owned<(payload: any) => unknown>>>()
+
+const tools = new Map<string, Owned<AgentToolDefinition>>()
+
+export function addAgentTool(owner: string, def: AgentToolDefinition): Disposable {
+  if (!/^[a-z][a-z0-9_]{0,40}$/.test(def.name) || tools.has(def.name)) throw new Error(`tool name "${def.name}" is not allowed or taken`)
+  tools.set(def.name, { owner, def })
+  return { dispose: () => void (tools.get(def.name)?.owner === owner && tools.delete(def.name)) }
+}
+
+export function allAgentTools(): AgentToolDefinition[] {
+  return [...tools.values()].map((t) => t.def)
+}
+
+export function agentTool(name: string): AgentToolDefinition | undefined {
+  return tools.get(name)?.def
+}
+
+// Tool names as the agents see them: farline_x (pi), mcp__farline__x (Claude Code).
+export function agentToolFromCall(called: string): AgentToolDefinition | undefined {
+  const m = called.match(/^(?:mcp__farline__|farline_)(.+)$/)
+  return m ? agentTool(m[1]) : undefined
+}
+
+export function isHiddenTool(called: string) {
+  return !!agentToolFromCall(called)?.hidden
+}
+
+export function agentInstructions(): string {
+  return allAgentTools().map((t) => t.instructions).filter(Boolean).join('\n\n')
+}
 
 // Environment variables that hold plugin secrets; never passed to agents.
 export const secretEnv = new Set<string>()

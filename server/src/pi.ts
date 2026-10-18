@@ -11,12 +11,13 @@ import { delimiter, join } from 'node:path'
 import type { EffortLevel, Item, ModelOption, Patch, ProviderInfo, SessionSnapshot, SessionState, SessionStatus } from '../../shared/types.ts'
 import { config } from './config.ts'
 import { t, tx } from './i18n.ts'
-import { allProviders, emit, secretEnv } from './plugins/registry.ts'
+import { agentInstructions, agentToolFromCall, allAgentTools, allProviders, emit, secretEnv } from './plugins/registry.ts'
 import type { SessionInfo } from './plugins/types.ts'
 import { notify } from './push.ts'
 import { save, state, type SessionMeta } from './store.ts'
 import { ItemLog } from './transcript.ts'
 import { loadUpload } from './uploads.ts'
+import { applyReaction, lastUserMessageId, restoreReactions } from './reactions.ts'
 
 const SNAPSHOT_ITEMS = 400
 const EXTENSION = new URL('../pi/farline-providers.js', import.meta.url).pathname
@@ -74,7 +75,8 @@ function sharedProviders() {
 function processEnv() {
   const env: Record<string, string | undefined> = { ...process.env }
   for (const k of Object.keys(env)) if (k.startsWith('FARLINE_') || secretEnv.has(k)) delete env[k]
-  return { ...env, ...sharedProviders() }
+  const tools = allAgentTools().map((d) => ({ name: `farline_${d.name}`, description: d.description, params: d.params }))
+  return { ...env, ...sharedProviders(), FARLINE_PI_TOOLS: JSON.stringify(tools) }
 }
 
 // ---------- RPC process ----------
@@ -469,7 +471,14 @@ export class PiView {
       }
     }
     this.log.settleRunning()
+    restoreReactions(this)
     this.log.discardChanges()
+  }
+
+  react(itemId: string, emoji: string, by: 'agent' | 'user') {
+    if (!applyReaction(this, itemId, emoji, by)) return false
+    this.flush()
+    return true
   }
 
   private start() {
@@ -477,6 +486,7 @@ export class PiView {
     const args = ['--session', this.file]
     if (provider && this.meta.model) args.push('--provider', provider, '--model', this.meta.model)
     args.push('--thinking', thinking(this.meta.effort))
+    if (agentInstructions()) args.push('--append-system-prompt', agentInstructions())
     const p = new RpcProcess(args, this.cwd)
     p.onEvent = (e) => this.onEvent(e)
     p.onExit = () => {
@@ -527,6 +537,16 @@ export class PiView {
           if (m.model) this.model = m.model
           this.msgId = null
           this.soon()
+        }
+        break
+      }
+      case 'tool_execution_start': {
+        // A plugin tool: do its work here (pi's side only says ok).
+        const def = agentToolFromCall(e.toolName)
+        if (def) {
+          Promise.resolve(def.run(e.args ?? {}, { session: this.info(), lastUserMessageId: lastUserMessageId(this.log) })).catch((err) =>
+            console.error(`[pi] tool ${e.toolName} failed:`, err?.message ?? err),
+          )
         }
         break
       }

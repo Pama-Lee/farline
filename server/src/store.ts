@@ -1,7 +1,7 @@
 import { readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { config } from './config.ts'
-import type { EffortLevel, PermissionMode, Provider } from '../../shared/types.ts'
+import type { EffortLevel, PermissionMode, Provider, Reaction } from '../../shared/types.ts'
 
 export interface SessionMeta {
   provider: Provider
@@ -16,6 +16,8 @@ export interface SessionMeta {
   rewind?: { at: string; from: string }
   // Reply text the user rewrote, by item id.
   edited?: string[]
+  // Emoji reactions on messages, by item id.
+  reactions?: Record<string, Reaction[]>
 }
 
 interface State {

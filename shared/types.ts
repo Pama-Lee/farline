@@ -34,8 +34,8 @@ export interface PermissionAsk {
 }
 
 export type Item =
-  | { kind: 'user'; id: string; text: string; images?: ImageRef[]; files?: string[]; ts?: number }
-  | { kind: 'text'; id: string; text: string; streaming?: boolean; ts?: number; edited?: boolean }
+  | { kind: 'user'; id: string; text: string; images?: ImageRef[]; files?: string[]; ts?: number; reactions?: Reaction[] }
+  | { kind: 'text'; id: string; text: string; streaming?: boolean; ts?: number; edited?: boolean; reactions?: Reaction[] }
   | { kind: 'thinking'; id: string; text: string; streaming?: boolean }
   | {
       kind: 'tool'
@@ -252,6 +252,12 @@ export interface AgentStatus {
   // Output of the running or last install.
   log: string
   error?: string
+}
+
+// An emoji on a message, from the agent or the user.
+export interface Reaction {
+  emoji: string
+  by: 'agent' | 'user'
 }
 
 export interface RemoteSource {

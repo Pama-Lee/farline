@@ -283,7 +283,7 @@ api.post('/sessions', async (c) => {
   const model = models().some((m) => m.provider === provider && m.value === body.model) ? body.model : defaultModel(provider)
   const effort = body.effort && EFFORTS.includes(body.effort) ? body.effort : 'xhigh'
   const classifierModel = body.classifierModel && info?.classifierModels?.includes(body.classifierModel) ? body.classifierModel : undefined
-  state.prefs = { lastCwd: dirs.path, provider, model, permissionMode, effort, classifierModel }
+  state.prefs = { ...state.prefs, lastCwd: dirs.path, provider, model, permissionMode, effort, classifierModel }
   save()
   const view = createView(dirs.path, { provider, model, permissionMode, effort, classifierModel }, body.text.trim().replace(/\s+/g, ' ').slice(0, 40))
   view.send(body.text, body.uploads)
@@ -427,6 +427,15 @@ api.put('/sessions/:id/items/:itemId/text', async (c) => {
     return c.json({ error: e?.message ?? t('common.saveFailed') }, 409)
   }
   return c.json({ ok: true })
+})
+
+// The user's own reaction on a message: toggles.
+api.put('/sessions/:id/items/:itemId/reactions', async (c) => {
+  const { emoji } = await c.req.json<{ emoji?: unknown }>().catch(() => ({ emoji: undefined }))
+  const view = await openView(c.req.param('id'))
+  if (!view) return c.json({ error: t('err.sessionNotFound') }, 404)
+  if (typeof emoji !== 'string' || !emoji.trim()) return c.json({ error: t('err.badRequest') }, 400)
+  return view.react(c.req.param('itemId'), emoji, 'user') ? c.json({ ok: true }) : c.json({ error: t('err.messageNotFound') }, 404)
 })
 
 api.get('/sessions/:id/mcp', async (c) => {

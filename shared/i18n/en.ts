@@ -410,4 +410,6 @@ export const en = {
   'onboard.ownLoginDesc': 'Have a Claude subscription, or models already set up in pi? Run claude or pi once in a terminal on this machine and sign in there.',
   'onboard.go': 'Start using Farline',
   'onboard.skip': 'Skip for now',
+  'reactions.add': 'Add reaction',
+  'reactions.byAgent': 'From the agent',
 }

@@ -398,4 +398,6 @@ export const zhCN: Messages = {
   'onboard.ownLoginDesc': '有 Claude 订阅，或者 pi 里已经配好了模型？在这台机器的终端里运行一次 claude 或 pi 登录即可。',
   'onboard.go': '开始使用 Farline',
   'onboard.skip': '先跳过',
+  'reactions.add': '添加表情',
+  'reactions.byAgent': 'Agent 贴的',
 }

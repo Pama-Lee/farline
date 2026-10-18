@@ -73,7 +73,11 @@ export interface PluginContext extends Localizer {
     get(id: string): SessionState | undefined
     // Send a user message, starting the session's process if needed.
     send(id: string, text: string): Promise<void>
+    // Put the agent's emoji reaction on a message (replaces its earlier one).
+    react(id: string, messageId: string, emoji: string): Promise<void>
   }
+  // Tools the agent can call, in Claude Code and pi sessions alike.
+  agentTools: { register(tool: AgentToolDefinition): Disposable }
   helpers: {
     // Environment that points Claude Code at an Anthropic-compatible API.
     anthropicCompatible(opts: AnthropicCompatibleOptions): Record<string, string>
@@ -121,6 +125,35 @@ export interface AnthropicCompatibleOptions {
   classifierModel?: string
   // Claude Code assumes 200k for models it does not know.
   contextWindow?: number
+}
+
+// ---- agent tools ----
+
+export interface AgentToolParam {
+  type: 'string' | 'number' | 'boolean'
+  description?: string
+  optional?: boolean
+  enum?: string[]
+}
+
+export interface AgentToolDefinition {
+  // Lowercase letters, digits and _. The agent sees it as farline_<name>
+  // (pi) or mcp__farline__<name> (Claude Code).
+  name: string
+  description: string
+  params: Record<string, AgentToolParam>
+  // Leave the call out of the conversation view.
+  hidden?: boolean
+  // Added to the agent's system prompt while the plugin is on.
+  instructions?: string
+  // The text returned goes back to the agent.
+  run(args: Record<string, unknown>, call: AgentToolCall): Promise<string | void> | string | void
+}
+
+export interface AgentToolCall {
+  session: SessionInfo
+  // The user's message the agent is answering.
+  lastUserMessageId?: string
 }
 
 // ---- notifications ----

@@ -1,0 +1,20 @@
+{
+  "name": "farline-plugin-reactions",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "farline": {
+    "id": "reactions",
+    "name": {
+      "en": "Reactions",
+      "zh-CN": "表情回应"
+    },
+    "description": {
+      "en": "The agent can put an emoji on your messages, and so can you",
+      "zh-CN": "Agent 可以给你的消息贴表情，你也可以"
+    },
+    "apiVersion": 1,
+    "server": "./server.ts",
+    "enabledByDefault": true
+  }
+}

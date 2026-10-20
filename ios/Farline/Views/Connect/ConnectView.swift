@@ -1,5 +1,6 @@
-// First screen: which server, then the password (or, on a fresh server, the
-// one-time setup code and a new password).
+// First screen, as the web's sign-in looks: the icon, the name, then the
+// server address, the password, or (on a fresh server) the setup code and a
+// new password.
 import SwiftUI
 
 struct ConnectView: View {
@@ -15,23 +16,30 @@ struct ConnectView: View {
   private enum Field { case server, code, password }
 
   var body: some View {
-    ZStack {
-      HorizonBackground()
-        .ignoresSafeArea()
-
-      ScrollView {
-        VStack(spacing: 28) {
-          Spacer(minLength: 60)
-          header
-          form
-          Spacer(minLength: 20)
-        }
-        .padding(.horizontal, 24)
-        .frame(maxWidth: 460)
-        .frame(maxWidth: .infinity)
+    ScrollView {
+      VStack(spacing: 18) {
+        Image("Logo")
+          .resizable()
+          .frame(width: 72, height: 72)
+          .clipShape(.rect(cornerRadius: 17, style: .continuous))
+        Text(verbatim: "Farline")
+          .font(.ui(22, .semibold))
+          .foregroundStyle(Color.text1)
+          .padding(.top, -8)
+        Text(subtitle)
+          .font(.ui(15))
+          .foregroundStyle(Color.text2)
+          .multilineTextAlignment(.center)
+          .padding(.top, -10)
+        form
       }
-      .scrollBounceBehavior(.basedOnSize)
+      .padding(24)
+      .frame(maxWidth: 408)
+      .frame(maxWidth: .infinity)
+      .containerRelativeFrame(.vertical, alignment: .center) { h, _ in h * 0.9 }
     }
+    .scrollBounceBehavior(.basedOnSize)
+    .background(Color.bg)
     .onAppear {
       if server.isEmpty { server = app.serverURL?.absoluteString ?? "" }
       focus = app.phase == .connect ? .server : app.phase == .setup ? .code : .password
@@ -42,25 +50,9 @@ struct ConnectView: View {
     }
   }
 
-  private var header: some View {
-    VStack(spacing: 10) {
-      Image(systemName: "point.forward.to.point.capsulepath")
-        .font(.system(size: 44, weight: .light))
-        .foregroundStyle(.white)
-        .frame(width: 84, height: 84)
-        .glassEffect(.regular.tint(.indigo.opacity(0.35)), in: .rect(cornerRadius: 24))
-      Text("Farline")
-        .font(.largeTitle.bold())
-      Text(subtitle)
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
-    }
-  }
-
   private var subtitle: LocalizedStringKey {
     switch app.phase {
-    case .setup: "Enter the setup code shown where Farline was started, then choose a password."
+    case .setup: "Set a password and you're ready to go."
     case .login: "Sign in to \(app.serverURL?.host() ?? "your server")."
     default: "Connect to your Farline server."
     }
@@ -68,59 +60,56 @@ struct ConnectView: View {
 
   @ViewBuilder
   private var form: some View {
-    VStack(spacing: 14) {
+    VStack(spacing: 12) {
       switch app.phase {
       case .setup:
         field("Setup code", text: $code, field: .code)
           .textInputAutocapitalization(.characters)
-        secure("New password (8+ characters)")
+          .multilineTextAlignment(.center)
+        secure("New password")
       case .login:
         secure("Password")
       default:
-        field("Server address", text: $server, field: .server, prompt: "farline.example.com")
+        field("Server address", text: $server, field: .server)
           .keyboardType(.URL)
           .textContentType(.URL)
           .textInputAutocapitalization(.never)
       }
 
-      if let message = error ?? app.connectError {
-        Text(message)
-          .font(.footnote)
-          .foregroundStyle(.red)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .transition(.opacity)
-      }
-
       Button(action: submit) {
         Group {
-          if busy { ProgressView().tint(.white) } else { Text(buttonTitle).fontWeight(.semibold) }
+          if busy { ProgressView().tint(Color.onInk) } else { Text(buttonTitle) }
         }
-        .frame(maxWidth: .infinity, minHeight: 30)
       }
-      .buttonStyle(.glassProminent)
-      .controlSize(.large)
+      .buttonStyle(InkButtonStyle(height: 52))
       .disabled(busy || !canSubmit)
+
+      Text(error ?? app.connectError ?? hint)
+        .font(.ui(error ?? app.connectError == nil ? 13 : 15))
+        .foregroundStyle(error ?? app.connectError == nil ? Color.text3 : Color.fRed)
+        .multilineTextAlignment(.center)
+        .frame(minHeight: 22)
 
       if app.phase != .connect {
         Button("Use a different server") { app.forgetServer() }
-          .font(.footnote)
-          .buttonStyle(.borderless)
+          .font(.ui(14))
+          .foregroundStyle(Color.text2)
       }
     }
-    .padding(20)
-    .glassEffect(.regular, in: .rect(cornerRadius: 28))
     .animation(.smooth, value: app.phase)
   }
 
-  private func field(_ title: LocalizedStringKey, text: Binding<String>, field: Field, prompt: String? = nil) -> some View {
-    TextField(title, text: text, prompt: prompt.map { Text(verbatim: $0) })
+  private var hint: String {
+    app.phase == .setup ? String(localized: "The setup code is printed in the terminal or log where Farline started, and saved as the setup-code file in its data folder.") : ""
+  }
+
+  private func field(_ title: LocalizedStringKey, text: Binding<String>, field: Field) -> some View {
+    TextField(title, text: text)
       .autocorrectionDisabled()
       .focused($focus, equals: field)
       .submitLabel(.go)
       .onSubmit(submit)
-      .padding(.horizontal, 16)
-      .frame(minHeight: 50)
-      .background(.background.opacity(0.55), in: .capsule)
+      .inputStyle()
   }
 
   private func secure(_ title: LocalizedStringKey) -> some View {
@@ -129,9 +118,7 @@ struct ConnectView: View {
       .focused($focus, equals: .password)
       .submitLabel(.go)
       .onSubmit(submit)
-      .padding(.horizontal, 16)
-      .frame(minHeight: 50)
-      .background(.background.opacity(0.55), in: .capsule)
+      .inputStyle()
   }
 
   private var buttonTitle: LocalizedStringKey {
@@ -170,26 +157,14 @@ struct ConnectView: View {
   }
 }
 
-// A slow, soft gradient for the glass to sit on.
-struct HorizonBackground: View {
-  var body: some View {
-    TimelineView(.animation(minimumInterval: 1 / 20)) { context in
-      let t = Float(context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 40) / 40 * 2 * .pi)
-      MeshGradient(
-        width: 3,
-        height: 3,
-        points: [
-          [0, 0], [0.5, 0], [1, 0],
-          [0, 0.5], [0.5 + 0.15 * sin(t), 0.45 + 0.1 * cos(t)], [1, 0.5],
-          [0, 1], [0.5, 1], [1, 1],
-        ],
-        colors: [
-          .indigo, .purple, .blue,
-          .blue, .teal, .indigo,
-          .black, .indigo, .purple,
-        ]
-      )
-      .opacity(0.85)
-    }
+private extension View {
+  func inputStyle() -> some View {
+    self
+      .font(.ui(17))
+      .foregroundStyle(Color.text1)
+      .padding(.horizontal, 22)
+      .frame(height: 52)
+      .background(Color.surface, in: .capsule)
+      .overlay(Capsule().strokeBorder(Color.line))
   }
 }

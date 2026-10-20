@@ -22,14 +22,16 @@ struct RootView: View {
         ProgressView()
           .controlSize(.large)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(Color.bg)
       case .connect, .setup, .login:
         ConnectView()
       case .ready:
         if let api = app.api {
-          SessionsView(api: api)
+          HomeView(api: api)
         }
       }
     }
+    .tint(Color.text1)
     .animation(.smooth, value: app.phase)
     .task { await app.start() }
   }

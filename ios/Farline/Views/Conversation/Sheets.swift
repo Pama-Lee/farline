@@ -1,56 +1,153 @@
 // Sheets opened from the conversation.
 import SwiftUI
 
-// What a tool call was given and what it returned.
-struct StepDetailView: View {
-  let step: Step
+// A run of steps as a timeline; each opens to what it was given and returned.
+struct StepsSheet: View {
+  let steps: [Step]
+  let live: Bool
   let api: APIClient
 
   @Environment(\.dismiss) private var dismiss
 
   var body: some View {
     NavigationStack {
-      ScrollView {
-        VStack(alignment: .leading, spacing: 20) {
-          switch step {
-          case .thinking(let t):
-            Text(t.text)
-              .textSelection(.enabled)
-              .foregroundStyle(.secondary)
-          case .tool(let tool):
-            section("Input") {
-              CodeBlockView(language: inputLanguage(tool), code: inputText(tool))
-            }
-            if let images = tool.images, !images.isEmpty {
-              section("Images") {
-                ForEach(images, id: \.url) { image in
-                  RemoteImage(url: api.url(image.url))
-                    .scaledToFit()
-                    .clipShape(.rect(cornerRadius: 14))
+      Group {
+        if steps.count == 1, let only = steps.first {
+          StepDetail(step: only, api: api)
+        } else {
+          ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+              ForEach(Array(steps.enumerated()), id: \.element.id) { i, step in
+                NavigationLink {
+                  StepDetail(step: step, api: api)
+                } label: {
+                  TimelineRow(step: step, live: live, last: i == steps.count - 1)
                 }
+                .buttonStyle(PressStyle())
               }
             }
-            if let result = tool.result, !result.isEmpty {
-              section(tool.failed ? "Error" : "Result") {
-                CodeBlockView(language: "", code: result + (tool.truncated == true ? "\n…" : ""))
-              }
-            } else if tool.running {
-              ProgressView().frame(maxWidth: .infinity)
-            }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 20)
           }
+          .background(Color.bg)
+          .navigationTitle(StepText.summary(steps))
+          .navigationBarTitleDisplayMode(.inline)
         }
-        .padding()
       }
-      .navigationTitle(title)
-      .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .confirmationAction) {
+        ToolbarItem(placement: .topBarLeading) {
           Button(role: .close) { dismiss() }
         }
       }
     }
-    .presentationDetents([.medium, .large])
-    .presentationDragIndicator(.visible)
+    .presentationDetents([.fraction(0.51), .large])
+    .farlineSheet()
+  }
+}
+
+private struct TimelineRow: View {
+  let step: Step
+  let live: Bool
+  let last: Bool
+
+  var body: some View {
+    let l = StepText.label(step)
+    HStack(alignment: .top, spacing: 14) {
+      Group {
+        if running {
+          Ring(size: 17, width: 2)
+        } else {
+          Image(systemName: step.tool.map { $0.name.hasPrefix("mcp__") } == true ? "powerplug" : step.category.symbol)
+            .font(.ui(17, .light))
+        }
+      }
+      .foregroundStyle(Color.text2)
+      .frame(width: 28, height: 28)
+      VStack(alignment: .leading, spacing: 0) {
+        Text(verbatim: l.title)
+          .font(.ui(15.5))
+          .foregroundStyle(step.tool?.failed == true ? Color.fRed : Color.text1)
+        if !l.detail.isEmpty {
+          Text(verbatim: l.detail)
+            .font(.ui(14.5))
+            .foregroundStyle(Color(light: 0x8A8985, dark: 0x8A8985))
+            .lineLimit(1)
+        }
+      }
+      .padding(.top, 3)
+      Spacer(minLength: 0)
+    }
+    .padding(.bottom, last ? 0 : 30)
+    .background(alignment: .topLeading) {
+      if !last {
+        Rectangle()
+          .fill(Color.line)
+          .frame(width: 1.5)
+          .padding(.top, 33)
+          .padding(.bottom, 9)
+          .padding(.leading, 13.25)
+      }
+    }
+    .contentShape(.rect)
+  }
+
+  private var running: Bool {
+    guard live else { return false }
+    switch step {
+    case .tool(let t): return t.running
+    case .thinking(let t): return t.streaming == true
+    }
+  }
+}
+
+// What a tool call was given and what it returned, in labeled boxes.
+struct StepDetail: View {
+  let step: Step
+  let api: APIClient
+
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 0) {
+        switch step {
+        case .thinking(let t):
+          Text(t.text)
+            .font(.ui(14.5))
+            .lineSpacing(5)
+            .foregroundStyle(Color.text2)
+            .textSelection(.enabled)
+            .padding(.top, 4)
+        case .tool(let tool):
+          ForEach(Array(fields(tool).enumerated()), id: \.offset) { _, f in
+            FieldLabel(f.label)
+            FieldBox(text: f.text, plain: f.plain, diff: f.diff)
+          }
+          if let images = tool.images, !images.isEmpty {
+            FieldLabel("Images")
+            ForEach(images, id: \.url) { image in
+              RemoteImage(url: api.url(image.url))
+                .scaledToFit()
+                .clipShape(.rect(cornerRadius: 14))
+            }
+          }
+          if let result = tool.result, !result.isEmpty {
+            FieldLabel(tool.failed ? "Error" : "Output")
+            FieldBox(text: result + (tool.truncated == true ? String(localized: "\n… (truncated)") : ""), error: tool.failed)
+          } else if tool.running {
+            ProgressView().frame(maxWidth: .infinity).padding(.top, 20)
+          } else if !tool.failed {
+            FieldLabel("Output")
+            FieldBox(text: String(localized: "(no output)"))
+          }
+        }
+      }
+      .padding(.horizontal, 16)
+      .padding(.bottom, 20)
+      .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .background(Color.bg)
+    .navigationTitle(title)
+    .navigationBarTitleDisplayMode(.inline)
   }
 
   private var title: String {
@@ -60,23 +157,74 @@ struct StepDetailView: View {
     }
   }
 
-  private func section<Content: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text(title)
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
-        .textCase(.uppercase)
-      content()
+  private struct Field {
+    let label: LocalizedStringKey
+    let text: String
+    var plain = false
+    var diff: (old: String, new: String)?
+  }
+
+  private func fields(_ t: ToolItem) -> [Field] {
+    func s(_ key: String) -> String? { t.arg(key).flatMap { $0.isEmpty ? nil : $0 } }
+    switch t.name {
+    case "Bash":
+      return [s("description").map { Field(label: "Description", text: $0, plain: true) }, Field(label: "Command", text: "$ " + (s("command") ?? ""))].compactMap { $0 }
+    case "Read":
+      return [Field(label: "File", text: s("file_path") ?? "")]
+    case "Write":
+      return [Field(label: "File", text: s("file_path") ?? ""), Field(label: "Content", text: s("content") ?? "")]
+    case "Edit":
+      return [Field(label: "File", text: s("file_path") ?? ""), Field(label: "Change", text: "", diff: (s("old_string") ?? "", s("new_string") ?? ""))]
+    case "Grep", "Glob":
+      return [Field(label: "Pattern", text: s("pattern") ?? ""), s("path").map { Field(label: "Path", text: $0) }].compactMap { $0 }
+    case "WebSearch":
+      return [Field(label: "Query", text: s("query") ?? "", plain: true)]
+    case "WebFetch":
+      return [Field(label: "URL", text: s("url") ?? ""), s("prompt").map { Field(label: "Prompt", text: $0, plain: true) }].compactMap { $0 }
+    case "Agent", "Task":
+      return [s("description").map { Field(label: "Description", text: $0, plain: true) }, s("prompt").map { Field(label: "Prompt", text: $0, plain: true) }].compactMap { $0 }
+    default:
+      return [Field(label: "Input", text: JSONValue.object(t.input).pretty)]
     }
   }
+}
 
-  private func inputLanguage(_ tool: ToolItem) -> String {
-    tool.name == "Bash" ? "sh" : "json"
-  }
+private struct FieldBox: View {
+  let text: String
+  var plain = false
+  var diff: (old: String, new: String)?
+  var error = false
 
-  private func inputText(_ tool: ToolItem) -> String {
-    if tool.name == "Bash", let cmd = tool.arg("command") { return cmd }
-    return JSONValue.object(tool.input).pretty
+  var body: some View {
+    Group {
+      if let diff {
+        VStack(alignment: .leading, spacing: 0) {
+          ForEach(Array(diff.old.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+            Text(verbatim: "- " + line)
+              .foregroundStyle(Color.fRed)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .background(Color.fRed.opacity(0.08))
+          }
+          ForEach(Array(diff.new.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+            Text(verbatim: "+ " + line)
+              .foregroundStyle(Color.fGreen)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .background(Color.fGreen.opacity(0.1))
+          }
+        }
+      } else {
+        Text(verbatim: text)
+          .foregroundStyle(error ? Color.fRed : Color.text1)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+    .font(plain ? .ui(13.5) : .mono(12.5))
+    .lineSpacing(3)
+    .textSelection(.enabled)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 9)
+    .background(Color.surface, in: .rect(cornerRadius: 12))
+    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.line))
   }
 }
 
@@ -93,19 +241,21 @@ struct EditReplyView: View {
   var body: some View {
     NavigationStack {
       TextEditor(text: $text)
-        .font(.body)
-        .padding(.horizontal, 12)
+        .font(.ui(16.5))
+        .foregroundStyle(Color.text1)
+        .padding(.horizontal, 14)
         .scrollContentBackground(.hidden)
+        .background(Color.bg)
         .safeAreaInset(edge: .bottom) {
           if let error {
-            Text(error).font(.footnote).foregroundStyle(.red).padding()
+            Text(error).font(.ui(14)).foregroundStyle(Color.fRed).padding()
           }
         }
         .navigationTitle("Edit reply")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-          ToolbarItem(placement: .cancellationAction) {
-            Button(role: .cancel) { dismiss() }
+          ToolbarItem(placement: .topBarLeading) {
+            Button(role: .close) { dismiss() }
           }
           ToolbarItem(placement: .confirmationAction) {
             Button(role: .confirm) {
@@ -115,6 +265,7 @@ struct EditReplyView: View {
           }
         }
     }
+    .farlineSheet()
     .onAppear { text = item.text }
   }
 
@@ -151,10 +302,11 @@ struct RewindView: View {
         Section {
           Text(item.text)
             .lineLimit(4)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color.text2)
         } footer: {
           Text("Everything after this message is undone.")
         }
+        .listRowBackground(Color.surface)
 
         Section {
           option("Conversation and code", systemImage: "arrow.uturn.backward.circle", enabled: changedFiles > 0) {
@@ -170,26 +322,32 @@ struct RewindView: View {
           if preview == nil {
             ProgressView()
           } else if changedFiles > 0, let p = preview {
-            Text("^[\(changedFiles) file](inflect: true) changed, +\(p.insertions ?? 0) −\(p.deletions ?? 0)")
+            Text("\(changedFiles) files changed, +\(p.insertions ?? 0) −\(p.deletions ?? 0)")
           } else {
             Text("No code changes to undo.")
           }
         }
+        .listRowBackground(Color.surface)
 
         if let error {
-          Section { Text(error).foregroundStyle(.red) }
+          Section { Text(error).foregroundStyle(Color.fRed) }
+            .listRowBackground(Color.surface)
         }
       }
+      .font(.ui(15.5))
+      .foregroundStyle(Color.text1)
+      .farlineList()
       .disabled(busy)
       .navigationTitle("Rewind")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
-        ToolbarItem(placement: .cancellationAction) {
-          Button(role: .cancel) { dismiss() }
+        ToolbarItem(placement: .topBarLeading) {
+          Button(role: .close) { dismiss() }
         }
       }
     }
     .presentationDetents([.medium, .large])
+    .farlineSheet()
     .task {
       preview = (try? await model.api.rewindPreview(model.id, messageId: item.id)) ?? RewindPreview(canRewind: false, error: nil, filesChanged: nil, insertions: nil, deletions: nil)
     }

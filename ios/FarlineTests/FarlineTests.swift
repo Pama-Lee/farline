@@ -54,7 +54,8 @@ struct BlockTests {
     #expect(blocks.count == 5)
     guard case .steps(_, let steps) = blocks[1] else { Issue.record("no steps"); return }
     #expect(steps.count == 2)
-    #expect(StepText.detail(steps[0]) == "b.swift")
+    #expect(StepText.label(steps[0]).detail == "b.swift")
+    #expect(StepText.label(steps[1]).detail == "make")
     guard case .text(_, let firstLast) = blocks[2], case .text(_, let secondLast) = blocks[3] else { Issue.record("no text"); return }
     #expect(!firstLast)
     #expect(secondLast)

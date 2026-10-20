@@ -44,15 +44,15 @@ enum StepCategory: Hashable, Sendable, CaseIterable {
 
   var symbol: String {
     switch self {
-    case .bash: "terminal"
+    case .bash: "apple.terminal"
     case .read: "doc.text"
-    case .edit: "pencil"
+    case .edit: "square.and.pencil"
     case .search: "magnifyingglass"
     case .web: "globe"
-    case .agent: "person.2"
+    case .agent: "cpu"
     case .todo: "checklist"
-    case .think: "sparkle"
-    case .other: "wrench.and.screwdriver"
+    case .think: "clock"
+    case .other: "wrench.adjustable"
     }
   }
 }
@@ -135,23 +135,97 @@ extension [Item] {
 }
 
 enum StepText {
-  // The short line for one step: what it did and to what.
-  static func detail(_ step: Step) -> String {
+  // What a step did ("Read") and to what ("auth.ts"), as web/src/lib/steps.ts
+  // words it.
+  static func label(_ step: Step) -> (title: String, detail: String) {
     switch step {
     case .thinking(let t):
-      return t.text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+      let flat = t.text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+      return (t.streaming == true ? String(localized: "Thinking") : String(localized: "Thought"), String(flat.prefix(80)))
     case .tool(let t):
+      let done = !t.running
+      if t.taskId != nil {
+        return (t.name == "Monitor" ? String(localized: "Started monitor") : String(localized: "Moved to background"), t.arg("description") ?? t.arg("command") ?? t.arg("prompt") ?? "")
+      }
       switch t.name {
-      case "Bash": return firstLine(t.arg("description") ?? t.arg("command"))
-      case "Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "NotebookRead":
-        return fileName(t.arg("file_path") ?? t.arg("notebook_path"))
-      case "Grep", "Glob": return t.arg("pattern") ?? ""
-      case "WebSearch": return t.arg("query") ?? ""
-      case "WebFetch": return URL(string: t.arg("url") ?? "")?.host() ?? t.arg("url") ?? ""
-      case "Agent", "Task": return t.arg("description") ?? ""
-      default: return ""
+      case "Bash":
+        return (done ? String(localized: "Ran") : String(localized: "Running"), nonEmpty(t.arg("description")) ?? t.arg("command") ?? "")
+      case "WebSearch":
+        return (done ? String(localized: "Searched the web") : String(localized: "Searching the web"), t.arg("query") ?? "")
+      case "WebFetch":
+        return (done ? String(localized: "Fetched") : String(localized: "Fetching"), t.arg("url") ?? "")
+      case "Read":
+        return (done ? String(localized: "Read") : String(localized: "Reading"), fileName(t.arg("file_path")))
+      case "Edit", "MultiEdit":
+        return (done ? String(localized: "Edited") : String(localized: "Editing"), fileName(t.arg("file_path")))
+      case "Write":
+        return (done ? String(localized: "Wrote") : String(localized: "Writing"), fileName(t.arg("file_path")))
+      case "NotebookEdit":
+        return (done ? String(localized: "Edited") : String(localized: "Editing"), fileName(t.arg("notebook_path")))
+      case "Grep":
+        return (done ? String(localized: "Searched code") : String(localized: "Searching code"), t.arg("pattern") ?? "")
+      case "Glob":
+        return (done ? String(localized: "Found files") : String(localized: "Finding files"), t.arg("pattern") ?? "")
+      case "Agent", "Task":
+        return (done ? String(localized: "Subtask done") : String(localized: "Subtask running"), t.arg("description") ?? "")
+      case "TodoWrite":
+        var n: Int?
+        if case .array(let a)? = t.input["todos"] { n = a.count }
+        return (String(localized: "Updated todos"), n.map { String(localized: "\($0) items") } ?? "")
+      case "Skill":
+        return (String(localized: "Used skill"), nonEmpty(t.arg("skill")) ?? t.arg("command") ?? "")
+      case "ToolSearch":
+        return (String(localized: "Loaded tools"), t.arg("query") ?? "")
+      default:
+        if let (server, tool) = mcp(t.name) {
+          return (done ? String(localized: "Called \(server)") : String(localized: "Calling \(server)"), tool)
+        }
+        return (done ? String(localized: "Called \(t.name)") : String(localized: "Calling \(t.name)"), "")
       }
     }
+  }
+
+  // The short line for one step.
+  static func detail(_ step: Step) -> String { label(step).detail }
+
+  // "Read 2 files, searched code": what a run of steps did.
+  static func summary(_ steps: [Step]) -> String {
+    var counts: [(StepCategory, Int)] = []
+    func bump(_ c: StepCategory, _ by: Int) {
+      if let i = counts.firstIndex(where: { $0.0 == c }) { counts[i].1 += by } else { counts.append((c, by)) }
+    }
+    for s in steps { bump(s.category, s.category == .edit ? 0 : 1) }
+    let edited = Set(steps.compactMap { s -> String? in
+      guard let t = s.tool, s.category == .edit else { return nil }
+      return t.arg("file_path") ?? ""
+    })
+    if let i = counts.firstIndex(where: { $0.0 == .edit }) { counts[i].1 = max(edited.count, 1) }
+    // Thinking only shows up when nothing else happened.
+    if counts.count > 1 { counts.removeAll { $0.0 == .think } }
+    return counts.map { c, n in phrase(c, n) }.joined(separator: String(localized: ", ", comment: "Joins step summaries"))
+  }
+
+  private static func phrase(_ c: StepCategory, _ n: Int) -> String {
+    switch c {
+    case .web: String(localized: "Browsed the web")
+    case .bash: String(localized: "Ran \(n) commands")
+    case .read: String(localized: "Read \(n) files")
+    case .edit: String(localized: "Edited \(n) files")
+    case .search: String(localized: "Searched the code")
+    case .agent: String(localized: "Finished \(n) subtasks")
+    case .think: String(localized: "Thought")
+    case .todo: String(localized: "Updated the todos")
+    case .other: String(localized: "Called \(n) tools")
+    }
+  }
+
+  private static func mcp(_ name: String) -> (String, String)? {
+    guard name.hasPrefix("mcp__") else { return nil }
+    let parts = name.dropFirst(5).components(separatedBy: "__")
+    guard parts.count >= 2 else { return nil }
+    var server = parts[0]
+    if server.hasPrefix("claude_ai_") { server.removeFirst(10) }
+    return (server, parts[1...].joined(separator: "__"))
   }
 
   // Tool name as shown: MCP tools as "server · tool".
@@ -166,16 +240,9 @@ enum StepText {
     return (path as NSString).lastPathComponent
   }
 
-  static func firstLine(_ s: String?) -> String {
-    guard let s else { return "" }
-    return s.split(whereSeparator: \.isNewline).first.map(String.init) ?? s
-  }
-
-  // Counts per category, in a stable order, for the folded summary.
-  static func counts(_ steps: [Step]) -> [(StepCategory, Int)] {
-    var counts: [StepCategory: Int] = [:]
-    for s in steps { counts[s.category, default: 0] += 1 }
-    return StepCategory.allCases.compactMap { c in counts[c].map { (c, $0) } }
+  private static func nonEmpty(_ s: String?) -> String? {
+    guard let s, !s.isEmpty else { return nil }
+    return s
   }
 }
 

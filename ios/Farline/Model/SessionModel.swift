@@ -34,6 +34,29 @@ final class SessionModel {
 
   var running: Bool { state?.status == .running }
   var busyElsewhere: Bool { state?.status == .busyElsewhere }
+  // Working, or waiting on the user.
+  var busy: Bool { state?.status == .running || state?.status == .requiresAction }
+
+  // The tool call waiting for a yes or no, shown above the composer.
+  var pendingPermission: ToolItem? {
+    for item in items {
+      if case .tool(let t) = item, t.permission?.pending == true { return t }
+    }
+    return nil
+  }
+
+  // A reply is arriving, so the thinking dots step aside.
+  var streamingText: Bool {
+    if case .text(let t)? = items.last { return t.streaming == true }
+    return false
+  }
+
+  func steps(_ id: String) -> [Step]? {
+    for block in blocks {
+      if case .steps(let sid, let steps) = block, sid == id { return steps }
+    }
+    return nil
+  }
 
   func connect() {
     task?.cancel()

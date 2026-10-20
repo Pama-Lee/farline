@@ -1,4 +1,5 @@
-// One session's conversation with the composer floating over it.
+// One session, laid out like the web's: the thread on the page background,
+// a pending permission pinned above the composer card.
 import SwiftUI
 import UIKit
 
@@ -10,12 +11,16 @@ struct ConversationView: View {
   @State private var model: SessionModel
   @State private var scroll = ScrollPosition(edge: .bottom)
   @State private var atBottom = true
-  @State private var detail: Step?
+  @State private var openSteps: SheetID? = ProcessInfo.processInfo.environment["FARLINE_SHEET"] == "steps" ? SheetID(id: "") : nil
   @State private var editing: TextItem?
   @State private var rewinding: UserItem?
   @State private var renaming = false
   @State private var newTitle = ""
   @State private var toast: String?
+
+  struct SheetID: Identifiable {
+    let id: String
+  }
 
   init(id: String, api: APIClient, onOpenSession: @escaping (String) -> Void) {
     _model = State(initialValue: SessionModel(id: id, api: api))
@@ -24,27 +29,36 @@ struct ConversationView: View {
 
   var body: some View {
     ScrollView {
-      LazyVStack(alignment: .leading, spacing: 18) {
+      LazyVStack(alignment: .leading, spacing: 0) {
         if model.hasEarlier {
-          Button("Show earlier messages") { model.loadAll() }
-            .buttonStyle(.glass)
-            .frame(maxWidth: .infinity)
+          Button {
+            model.loadAll()
+          } label: {
+            Text("Load earlier messages")
+              .font(.ui(14.5))
+              .foregroundStyle(Color.text2)
+          }
+          .buttonStyle(PressStyle())
+          .frame(maxWidth: .infinity)
+          .padding(.top, 4)
+          .padding(.bottom, 12)
         }
         ForEach(model.blocks) { block in
           blockView(block)
-            .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
-        if model.running {
-          WorkingIndicator(since: model.runningSince)
+        if model.running && !model.streamingText {
+          ThinkingIndicator(since: model.runningSince)
+            .padding(.top, 18)
+            .padding(.bottom, 8)
         }
       }
       .padding(.horizontal, 18)
-      .padding(.top, 12)
-      .padding(.bottom, 8)
+      .padding(.top, 8)
+      .padding(.bottom, 16)
       .frame(maxWidth: 760)
       .frame(maxWidth: .infinity)
-      .animation(.smooth(duration: 0.25), value: model.blocks.count)
     }
+    .background(Color.bg)
     .scrollPosition($scroll)
     .defaultScrollAnchor(.bottom)
     .defaultScrollAnchor(.bottom, for: .sizeChanges)
@@ -69,40 +83,34 @@ struct ConversationView: View {
           withAnimation(.smooth) { scroll.scrollTo(edge: .bottom) }
         } label: {
           Image(systemName: "arrow.down")
-            .font(.body.weight(.semibold))
+            .font(.ui(16, .medium))
+            .foregroundStyle(Color.text1)
             .frame(width: 40, height: 40)
         }
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
+        .glassEffect(.regular.interactive(), in: .circle)
         .padding(.bottom, 8)
         .transition(.scale.combined(with: .opacity))
       }
     }
     .animation(.smooth, value: atBottom)
     .safeAreaBar(edge: .bottom) {
-      Composer(model: model)
+      bottomBar
     }
     .overlay(alignment: .top) {
       if let toast {
-        Text(toast)
-          .font(.callout)
-          .padding(.horizontal, 16)
-          .padding(.vertical, 10)
-          .glassEffect(.regular, in: .capsule)
-          .padding(.top, 8)
-          .transition(.move(edge: .top).combined(with: .opacity))
+        ToastView(text: toast)
           .task {
-            try? await Task.sleep(for: .seconds(2.5))
+            try? await Task.sleep(for: .seconds(2.2))
             withAnimation { self.toast = nil }
           }
       }
     }
     .navigationTitle(model.state?.title ?? "")
-    .navigationSubtitle(model.state.map { folderName($0.cwd) } ?? "")
+    .navigationSubtitle(app.device?.name ?? "")
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { toolbar }
-    .sheet(item: $detail) { step in
-      StepDetailView(step: step, api: model.api)
+    .sheet(item: $openSteps) { sheet in
+      StepsSheet(steps: steps(for: sheet.id), live: model.running, api: model.api)
     }
     .sheet(item: $editing) { item in
       EditReplyView(item: item, model: model)
@@ -110,7 +118,7 @@ struct ConversationView: View {
     .sheet(item: $rewinding) { item in
       RewindView(item: item, model: model, onOpenSession: onOpenSession)
     }
-    .alert("Rename session", isPresented: $renaming) {
+    .alert("Rename", isPresented: $renaming) {
       TextField("Title", text: $newTitle)
       Button("Cancel", role: .cancel) {}
       Button("Save") {
@@ -127,67 +135,144 @@ struct ConversationView: View {
     }
   }
 
+  // The steps of a group, or of the first group when opened for a screenshot.
+  private func steps(for id: String) -> [Step] {
+    if let steps = model.steps(id) { return steps }
+    for block in model.blocks {
+      if case .steps(_, let steps) = block { return steps }
+    }
+    return []
+  }
+
+  @ViewBuilder
+  private var bottomBar: some View {
+    VStack(spacing: 10) {
+      if let tool = model.pendingPermission {
+        PermissionCard(tool: tool, model: model)
+          .id(tool.id)
+          .padding(.horizontal, 15)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+      if model.busyElsewhere {
+        HStack(spacing: 8) {
+          Ring(size: 16, width: 2)
+          Text("Running elsewhere")
+        }
+        .font(.ui(14))
+        .foregroundStyle(Color.text2)
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .background(Color.surface, in: .capsule)
+        .shadow(color: .black.opacity(0.08), radius: 7, y: 3)
+        .padding(.horizontal, 15)
+      } else if let state = model.state {
+        Composer(
+          placeholder: "Reply",
+          api: model.api,
+          running: model.running,
+          modelLabel: app.catalog.models(for: state.provider).first { $0.value == state.model }?.label ?? state.model,
+          effortLabel: effortLabel(state),
+          draft: Binding(get: { model.draft }, set: { model.draft = $0 }),
+          onSend: { text, uploads in try await model.send(text, uploads: uploads) },
+          onStop: { await model.interrupt() }
+        ) {
+          ModelMenuContent(
+            catalog: app.catalog,
+            canChangeProvider: false,
+            provider: .constant(state.provider),
+            model: Binding(get: { state.model }, set: { m in perform { try await model.update(.init(model: m)) } }),
+            effort: Binding(get: { state.effort ?? .xhigh }, set: { e in perform { try await model.update(.init(effort: e)) } }),
+            mode: Binding(get: { state.permissionMode }, set: { m in perform { try await model.update(.init(permissionMode: m)) } })
+          )
+        }
+      }
+    }
+    .padding(.bottom, 6)
+    .animation(.smooth, value: model.pendingPermission?.id)
+  }
+
+  private func effortLabel(_ state: SessionState) -> LocalizedStringKey? {
+    let current = app.catalog.models(for: state.provider).first { $0.value == state.model }
+    guard current?.efforts?.isEmpty == false else { return nil }
+    return (state.effort ?? .xhigh).title
+  }
+
   @ViewBuilder
   private func blockView(_ block: Block) -> some View {
     switch block {
     case .user(let item):
-      UserBubble(item: item, api: model.api)
+      UserMessage(item: item, api: model.api)
         .contextMenu {
-          Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = item.text }
+          Button("Copy", systemImage: "doc.on.doc") { copy(item.text) }
           if !model.running {
             Button("Rewind to here", systemImage: "arrow.uturn.backward") { rewinding = item }
           }
-          ReactionMenu { emoji in react(item.id, emoji) }
-        }
-    case .text(let item, let last):
-      ReplyView(item: item)
-        .contextMenu {
-          Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = item.text }
-          if last && !model.running && item.streaming != true {
-            Button("Edit reply", systemImage: "pencil") { editing = item }
+          Menu {
+            ReactionButtons { emoji in react(item.id, emoji) }
+          } label: {
+            Label("React", systemImage: "face.smiling")
           }
-          ReactionMenu { emoji in react(item.id, emoji) }
         }
-    case .steps(_, let steps):
-      StepsView(steps: steps, live: model.running, model: model) { detail = $0 }
+        .padding(.vertical, 12)
+    case .text(let item, let last):
+      VStack(alignment: .leading, spacing: 8) {
+        MarkdownView(text: item.text)
+        if item.edited == true {
+          Text("Edited").font(.ui(12.5)).foregroundStyle(Color.text3)
+        }
+        ReactionPills(reactions: item.reactions)
+        if last && item.streaming != true && !model.running {
+          MsgActions(item: item, canEdit: true) {
+            copy(item.text)
+          } onReact: { emoji in
+            react(item.id, emoji)
+          } onEdit: {
+            editing = item
+          }
+        }
+      }
+      .padding(.vertical, 7)
+    case .steps(let id, let steps):
+      StepsRow(steps: steps, live: model.running) { openSteps = SheetID(id: id) }
+        .padding(.vertical, 6)
     case .ask(let item):
       AskCard(item: item, model: model)
+        .padding(.vertical, 7)
     case .notice(let item):
       NoticeView(item: item)
+        .padding(.vertical, 7)
     case .task(let item):
       TaskRow(item: item)
+        .padding(.vertical, 6)
     }
   }
 
   @ToolbarContentBuilder
   private var toolbar: some ToolbarContent {
-    if let state = model.state {
+    if model.busy {
       ToolbarItem(placement: .topBarTrailing) {
-        ModelMenu(state: state, catalog: app.catalog) { change in
-          perform { try await model.update(change) }
-        }
+        Ring()
+          .frame(width: 36, height: 36)
+          .accessibilityLabel(Text("Working"))
       }
+    }
+    if model.state != nil {
+      ToolbarSpacer(.fixed, placement: .topBarTrailing)
       ToolbarItem(placement: .topBarTrailing) {
         Menu {
-          Picker(selection: Binding(
-            get: { state.permissionMode },
-            set: { mode in perform { try await model.update(.init(permissionMode: mode)) } }
-          )) {
-            ForEach(PermissionMode.allCases) { m in
-              Label(m.title, systemImage: m.symbol).tag(m)
-            }
-          } label: {
-            Label("Permissions", systemImage: state.permissionMode.symbol)
-          }
-          .pickerStyle(.menu)
-          Divider()
           Button("Rename", systemImage: "pencil") {
-            newTitle = state.title
+            newTitle = model.state?.title ?? ""
             renaming = true
           }
+          Button("Copy session ID", systemImage: "doc.on.doc") { copy(model.id) }
           if let url = URL(string: "/s/\(model.id)", relativeTo: model.api.base) {
             ShareLink(item: url.absoluteURL) {
               Label("Share link", systemImage: "square.and.arrow.up")
+            }
+          }
+          Button("Hide from list", systemImage: "eye.slash", role: .destructive) {
+            perform {
+              try await model.update(.init(hidden: true))
+              toast = String(localized: "Hidden from the list")
             }
           }
         } label: {
@@ -195,6 +280,11 @@ struct ConversationView: View {
         }
       }
     }
+  }
+
+  private func copy(_ text: String) {
+    UIPasteboard.general.string = text
+    withAnimation { toast = String(localized: "Copied") }
   }
 
   private func react(_ itemId: String, _ emoji: String) {
@@ -213,65 +303,18 @@ struct ConversationView: View {
   }
 }
 
-// Model and effort, from the current provider only: a started session keeps
-// its agent.
-struct ModelMenu: View {
-  let state: SessionState
-  let catalog: Catalog
-  let onChange: (APIClient.SessionChange) -> Void
+// The web's toast: a black capsule near the top.
+struct ToastView: View {
+  let text: String
 
   var body: some View {
-    let models = catalog.models(for: state.provider)
-    let current = models.first { $0.value == state.model }
-    Menu {
-      Section(catalog.label(for: state.provider)) {
-        Picker("Model", selection: Binding(get: { state.model }, set: { onChange(.init(model: $0)) })) {
-          ForEach(models.filter { $0.more != true }) { m in
-            Text(m.label).tag(m.value)
-          }
-        }
-        .pickerStyle(.inline)
-        let more = models.filter { $0.more == true }
-        if !more.isEmpty {
-          Menu("More models") {
-            Picker("More models", selection: Binding(get: { state.model }, set: { onChange(.init(model: $0)) })) {
-              ForEach(more) { m in
-                Text(m.label).tag(m.value)
-              }
-            }
-            .pickerStyle(.inline)
-          }
-        }
-      }
-      if let efforts = current?.efforts, !efforts.isEmpty {
-        Section("Effort") {
-          Picker("Effort", selection: Binding(get: { state.effort ?? .xhigh }, set: { onChange(.init(effort: $0)) })) {
-            ForEach(efforts) { e in
-              Text(e.title).tag(e)
-            }
-          }
-          .pickerStyle(.inline)
-        }
-      }
-    } label: {
-      Text(current?.label ?? state.model)
-        .font(.subheadline.weight(.medium))
-        .lineLimit(1)
-    }
-  }
-}
-
-struct ReactionMenu: View {
-  let onPick: (String) -> Void
-  private static let emoji = ["👍", "❤️", "😂", "🎉", "👀", "🙏"]
-
-  var body: some View {
-    Menu {
-      ForEach(Self.emoji, id: \.self) { e in
-        Button(e) { onPick(e) }
-      }
-    } label: {
-      Label("React", systemImage: "face.smiling")
-    }
+    Text(text)
+      .font(.ui(15))
+      .foregroundStyle(Color.onInk)
+      .padding(.horizontal, 18)
+      .padding(.vertical, 10)
+      .background(Color.ink, in: .capsule)
+      .padding(.top, 8)
+      .transition(.move(edge: .top).combined(with: .opacity))
   }
 }

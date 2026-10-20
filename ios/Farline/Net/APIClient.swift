@@ -94,10 +94,12 @@ final class APIClient: Sendable {
   func device() async throws -> DeviceInfo { try await get("/device") }
   func catalog() async throws -> Catalog { try await get("/models") }
 
-  func dirs(_ path: String?) async throws -> DirListing {
-    var q = ""
-    if let path, let enc = path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) { q = "?path=\(enc)" }
-    return try await get("/fs\(q)")
+  func dirs(_ path: String?, hidden: Bool = false) async throws -> DirListing {
+    var c = URLComponents()
+    c.queryItems = []
+    if let path { c.queryItems?.append(URLQueryItem(name: "path", value: path)) }
+    if hidden { c.queryItems?.append(URLQueryItem(name: "hidden", value: "1")) }
+    return try await get("/fs?\(c.percentEncodedQuery ?? "")")
   }
 
   // MARK: - Sessions

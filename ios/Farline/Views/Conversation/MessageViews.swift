@@ -1,8 +1,10 @@
-// The pieces of a conversation: the user's turns, replies, steps, and cards.
+// The pieces of a conversation, drawn like the web's: the user's bubble,
+// replies, the gray steps line, and the permission and question cards.
+import AVFoundation
 import SwiftUI
 import UIKit
 
-struct UserBubble: View {
+struct UserMessage: View {
   let item: UserItem
   let api: APIClient
 
@@ -19,263 +21,275 @@ struct UserBubble: View {
       }
       if let files = item.files?.filter({ !isImagePath($0) }), !files.isEmpty {
         ForEach(files, id: \.self) { f in
-          Label(StepText.fileName(f), systemImage: "doc")
-            .font(.footnote)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.fill.tertiary, in: .capsule)
+          Label {
+            Text(verbatim: StepText.fileName(f).replacing(/^[\w-]{12}-/, with: ""))
+          } icon: {
+            Image(systemName: "doc.text")
+          }
+          .font(.ui(15))
+          .foregroundStyle(Color.text2)
+          .lineLimit(1)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 7)
+          .background(Color.surface, in: .rect(cornerRadius: 14))
+          .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.line))
         }
       }
       if !item.text.isEmpty {
         Text(item.text)
-          .textSelection(.enabled)
-          .padding(.horizontal, 14)
+          .font(.ui(16.5))
+          .lineSpacing(4)
+          .foregroundStyle(Color.text1)
+          .padding(.horizontal, 15)
           .padding(.vertical, 10)
-          .background(.fill.secondary, in: .rect(cornerRadius: 20))
+          .background(Color.tile, in: .rect(cornerRadius: 20))
       }
-      ReactionsRow(reactions: item.reactions)
+      ReactionPills(reactions: item.reactions)
     }
     .frame(maxWidth: .infinity, alignment: .trailing)
-    .padding(.leading, 48)
+    .padding(.leading, 56)
   }
 }
 
-struct ReplyView: View {
-  let item: TextItem
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      MarkdownView(text: item.text)
-      HStack(spacing: 8) {
-        if item.edited == true {
-          Text("Edited")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-        }
-        ReactionsRow(reactions: item.reactions)
-      }
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-  }
-}
-
-struct ReactionsRow: View {
+struct ReactionPills: View {
   let reactions: [Reaction]?
 
   var body: some View {
     if let reactions, !reactions.isEmpty {
-      HStack(spacing: 4) {
-        ForEach(Array(reactions.enumerated()), id: \.offset) { _, r in
-          Text(r.emoji)
-            .font(.callout)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(r.by == "user" ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.fill.tertiary), in: .capsule)
+      HStack(spacing: 6) {
+        ForEach(groups, id: \.emoji) { g in
+          HStack(spacing: 5) {
+            Text(verbatim: g.emoji).font(.ui(16))
+            Text(verbatim: "\(g.count)").font(.ui(13.5)).foregroundStyle(Color.text2)
+          }
+          .padding(.leading, 8)
+          .padding(.trailing, 10)
+          .frame(height: 30)
+          .background(g.mine ? Color.fillGray : Color.surface, in: .capsule)
+          .overlay(Capsule().strokeBorder(g.agent ? Color.text3 : Color.line))
         }
       }
     }
   }
+
+  private var groups: [(emoji: String, count: Int, mine: Bool, agent: Bool)] {
+    var out: [(emoji: String, count: Int, mine: Bool, agent: Bool)] = []
+    for r in reactions ?? [] {
+      if let i = out.firstIndex(where: { $0.emoji == r.emoji }) {
+        out[i].count += 1
+        out[i].mine = out[i].mine || r.by == "user"
+        out[i].agent = out[i].agent || r.by != "user"
+      } else {
+        out.append((r.emoji, 1, r.by == "user", r.by != "user"))
+      }
+    }
+    return out
+  }
 }
 
-// Tool calls and thinking in a row, folded into one line until opened.
-struct StepsView: View {
+// Copy, read aloud, react and edit, under the last reply of a turn.
+struct MsgActions: View {
+  let item: TextItem
+  let canEdit: Bool
+  let onCopy: () -> Void
+  let onReact: (String) -> Void
+  let onEdit: () -> Void
+
+  @State private var speaker = Speaker.shared
+
+  var body: some View {
+    HStack(spacing: 0) {
+      button("Copy", "doc.on.doc", action: onCopy)
+      button("Read aloud", speaker.speakingId == item.id ? "stop" : "play") {
+        speaker.toggle(item.id, text: item.text)
+      }
+      Menu {
+        ReactionButtons(onPick: onReact)
+      } label: {
+        icon("face.smiling")
+      }
+      .accessibilityLabel(Text("React"))
+      if canEdit {
+        button("Edit", "square.and.pencil", action: onEdit)
+      }
+    }
+    .foregroundStyle(Color.text2)
+    .padding(.leading, -6)
+  }
+
+  private func button(_ label: LocalizedStringKey, _ symbol: String, action: @escaping () -> Void) -> some View {
+    Button(action: action) { icon(symbol) }
+      .buttonStyle(PressStyle())
+      .accessibilityLabel(Text(label))
+  }
+
+  private func icon(_ symbol: String) -> some View {
+    Image(systemName: symbol)
+      .font(.ui(16, .light))
+      .contentTransition(.symbolEffect(.replace))
+      .frame(width: 34, height: 34)
+      .contentShape(.rect)
+  }
+}
+
+struct ReactionButtons: View {
+  let onPick: (String) -> Void
+  static let emoji = ["👍", "❤️", "😂", "🎉", "👀", "🙏"]
+
+  var body: some View {
+    ControlGroup {
+      ForEach(Self.emoji, id: \.self) { e in
+        Button { onPick(e) } label: { Text(verbatim: e) }
+      }
+    }
+    .controlGroupStyle(.compactMenu)
+  }
+}
+
+// Reads a reply aloud with the system voice.
+@MainActor
+@Observable
+final class Speaker {
+  static let shared = Speaker()
+
+  private let synth = AVSpeechSynthesizer()
+  private(set) var speakingId: String?
+
+  func toggle(_ id: String, text: String) {
+    synth.stopSpeaking(at: .immediate)
+    if speakingId == id {
+      speakingId = nil
+      return
+    }
+    let plain = text.replacing(/```[\s\S]*?```/, with: "").replacing(/[`*_#>|]/, with: " ")
+    let utterance = AVSpeechUtterance(string: plain)
+    utterance.voice = AVSpeechSynthesisVoice(language: plain.contains(/\p{Script=Han}/) ? "zh-CN" : "en-US")
+    synth.speak(utterance)
+    speakingId = id
+    Task {
+      try? await Task.sleep(for: .seconds(0.6))
+      while synth.isSpeaking { try? await Task.sleep(for: .seconds(0.3)) }
+      if speakingId == id { speakingId = nil }
+    }
+  }
+}
+
+// Tool calls and thinking in a row, folded into one gray line that opens a sheet.
+struct StepsRow: View {
   let steps: [Step]
   let live: Bool
-  let model: SessionModel
-  let onOpen: (Step) -> Void
-
-  @State private var expanded = false
+  let onOpen: () -> Void
 
   private var runningStep: Step? {
     guard live else { return nil }
-    if let tool = steps.last(where: { $0.tool?.running == true }) { return tool }
-    if let last = steps.last, case .thinking(let t) = last, t.streaming == true { return last }
-    return nil
-  }
-
-  private var pending: [ToolItem] {
-    steps.compactMap { s in
-      guard let t = s.tool, t.permission?.pending == true else { return nil }
-      return t
+    return steps.last { s in
+      switch s {
+      case .tool(let t): t.running
+      case .thinking(let t): t.streaming == true
+      }
     }
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Button {
-        withAnimation(.smooth) { expanded.toggle() }
-      } label: {
-        HStack(spacing: 8) {
-          if let run = runningStep {
-            Image(systemName: run.category.symbol)
-              .symbolEffect(.pulse, options: .repeat(.continuous))
-            StepLabel(step: run)
-          } else if steps.count == 1, let only = steps.first {
-            Image(systemName: only.category.symbol)
-            StepLabel(step: only)
-          } else {
-            Image(systemName: "list.bullet")
-            summary
-          }
-          Spacer(minLength: 4)
-          Image(systemName: "chevron.right")
-            .font(.caption.weight(.semibold))
-            .rotationEffect(.degrees(expanded ? 90 : 0))
+    Button(action: onOpen) {
+      HStack(spacing: 5) {
+        if let run = runningStep {
+          Ring(size: 16, width: 2)
+          let l = StepText.label(run)
+          Text(verbatim: "\(l.title) \(l.detail)")
+        } else if steps.count == 1, let only = steps.first {
+          let l = StepText.label(only)
+          Text(verbatim: l.title).foregroundStyle(only.tool?.failed == true ? Color.fRed : Color.text2)
+            + Text(verbatim: " \(l.detail)")
+        } else {
+          Text(verbatim: StepText.summary(steps))
         }
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .contentShape(.rect)
+        Image(systemName: "chevron.right")
+          .font(.ui(13, .medium))
       }
-      .buttonStyle(.plain)
-
-      if expanded {
-        VStack(alignment: .leading, spacing: 0) {
-          ForEach(steps) { step in
-            Button {
-              onOpen(step)
-            } label: {
-              HStack(spacing: 10) {
-                Image(systemName: step.category.symbol)
-                  .frame(width: 18)
-                  .foregroundStyle(step.tool?.failed == true ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                StepLabel(step: step)
-                  .lineLimit(1)
-                Spacer(minLength: 4)
-                if step.tool?.running == true && live {
-                  ProgressView().controlSize(.mini)
-                }
-              }
-              .font(.subheadline)
-              .padding(.vertical, 8)
-              .contentShape(.rect)
-            }
-            .buttonStyle(.plain)
-            if step.id != steps.last?.id { Divider().padding(.leading, 28) }
-          }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .background(.fill.quinary, in: .rect(cornerRadius: 16))
-        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
-      }
-
-      ForEach(pending, id: \.id) { tool in
-        PermissionCard(tool: tool, model: model)
-      }
+      .font(.ui(14.5))
+      .foregroundStyle(Color.text2)
+      .lineLimit(1)
+      .contentShape(.rect)
     }
-  }
-
-  private var summary: Text {
-    let joined = StepText.counts(steps).map { category, n in categoryText(category, n) }.formatted(.list(type: .and, width: .narrow))
-    return Text(verbatim: joined.prefix(1).uppercased() + joined.dropFirst())
-  }
-
-  private func categoryText(_ c: StepCategory, _ n: Int) -> String {
-    let text: AttributedString = switch c {
-    case .bash: AttributedString(localized: "ran ^[\(n) command](inflect: true)")
-    case .read: AttributedString(localized: "read ^[\(n) file](inflect: true)")
-    case .edit: AttributedString(localized: "edited ^[\(n) file](inflect: true)")
-    case .search: AttributedString(localized: "searched ^[\(n) time](inflect: true)")
-    case .web: AttributedString(localized: "browsed the web")
-    case .agent: AttributedString(localized: "ran ^[\(n) agent](inflect: true)")
-    case .todo: AttributedString(localized: "updated the plan")
-    case .think: AttributedString(localized: "thought")
-    case .other: AttributedString(localized: "used ^[\(n) tool](inflect: true)")
-    }
-    return String(text.characters)
+    .buttonStyle(PressStyle())
   }
 }
 
-struct StepLabel: View {
-  let step: Step
-
-  var body: some View {
-    let detail = StepText.detail(step)
-    switch step {
-    case .thinking:
-      Text("Thought") + Text(verbatim: detail.isEmpty ? "" : "  " + detail).foregroundStyle(.tertiary)
-    case .tool(let t):
-      Text(StepText.toolName(t.name)).fontWeight(.medium) + Text(verbatim: detail.isEmpty ? "" : "  " + detail).foregroundStyle(.tertiary)
-    }
-  }
-}
-
+// Asks before a tool runs; pinned above the composer.
 struct PermissionCard: View {
   let tool: ToolItem
   let model: SessionModel
 
   @State private var sending = false
   @State private var decided = 0
+  @State private var detailHeight: CGFloat = 0
 
   var body: some View {
     let ask = tool.permission!
-    VStack(alignment: .leading, spacing: 12) {
-      Label {
-        Text(ask.title ?? headline)
-          .font(.headline)
-      } icon: {
-        Image(systemName: "hand.raised.fill")
-          .foregroundStyle(.orange)
+    VStack(alignment: .leading, spacing: 0) {
+      Text(ask.title ?? headline)
+        .font(.ui(15.5, .semibold))
+        .foregroundStyle(Color.text1)
+      if let d = ask.description, !detail.hasSuffix(d) {
+        Text(d)
+          .font(.ui(13.5))
+          .foregroundStyle(Color.text2)
+          .padding(.top, 2)
       }
-      if let d = ask.description, !body_.hasSuffix(d) {
-        Text(d).font(.subheadline).foregroundStyle(.secondary)
-      }
-      if !body_.isEmpty {
+      if !detail.isEmpty {
         ScrollView {
-          Text(body_)
-            .font(.system(.footnote, design: .monospaced))
+          Text(verbatim: detail)
+            .font(.mono(14))
+            .foregroundStyle(Color.text1)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailHeight = $0 }
         }
-        .frame(maxHeight: 180)
-        .background(.fill.tertiary, in: .rect(cornerRadius: 12))
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(height: min(132, max(detailHeight, 1)))
+        .background(Color.bg, in: .rect(cornerRadius: 14))
+        .padding(.top, 12)
       }
-      GlassEffectContainer(spacing: 10) {
-        HStack(spacing: 10) {
-          Button(role: .destructive) {
-            decide(.deny)
-          } label: {
-            Text("Deny").frame(maxWidth: .infinity)
-          }
-          .buttonStyle(.glass)
-          Button {
-            decide(.allow)
-          } label: {
-            Text("Allow").fontWeight(.semibold).frame(maxWidth: .infinity)
-          }
-          .buttonStyle(.glassProminent)
-        }
-        .controlSize(.large)
+      HStack(spacing: 10) {
+        Button("Deny") { decide(.deny) }
+          .buttonStyle(OutlineButtonStyle())
+        Button("Allow") { decide(.allow) }
+          .buttonStyle(InkButtonStyle())
       }
+      .padding(.top, 14)
       if ask.canAlways {
-        Button("Always allow this") { decide(.always) }
-          .font(.footnote)
+        Button("Always allow") { decide(.always) }
+          .font(.ui(15))
+          .foregroundStyle(Color.text2)
           .frame(maxWidth: .infinity)
+          .padding(6)
+          .padding(.top, 8)
       }
     }
     .disabled(sending)
-    .padding(16)
-    .background(.background.secondary, in: .rect(cornerRadius: 24))
-    .overlay {
-      RoundedRectangle(cornerRadius: 24).strokeBorder(.orange.opacity(0.35), lineWidth: 1)
-    }
+    .padding(.horizontal, 18)
+    .padding(.top, 18)
+    .padding(.bottom, ask.canAlways ? 8 : 18)
+    .background(Color.surface, in: .rect(cornerRadius: 28))
+    .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
     .sensoryFeedback(.impact(weight: .medium), trigger: decided)
   }
 
   private var headline: String {
     switch tool.name {
-    case "Bash": String(localized: "Run a command?")
-    case "Write": String(localized: "Write a file?")
-    case "Edit", "MultiEdit": String(localized: "Edit a file?")
-    case "WebFetch": String(localized: "Open a web page?")
+    case "Bash": String(localized: "Allow this command?")
+    case "Write": String(localized: "Allow writing this file?")
+    case "Edit", "MultiEdit": String(localized: "Allow editing this file?")
+    case "WebFetch": String(localized: "Allow opening this page?")
     case "ExitPlanMode": String(localized: "Start on this plan?")
-    default: String(localized: "Use \(StepText.toolName(tool.name))?")
+    default: String(localized: "Allow \(StepText.toolName(tool.name))?")
     }
   }
 
-  private var body_: String {
+  private var detail: String {
     switch tool.name {
     case "Bash": tool.arg("command") ?? ""
     case "Write", "Edit", "MultiEdit": tool.arg("file_path") ?? ""
@@ -296,6 +310,7 @@ struct PermissionCard: View {
   }
 }
 
+// The agent's multiple-choice questions.
 struct AskCard: View {
   let item: AskItem
   let model: SessionModel
@@ -305,75 +320,83 @@ struct AskCard: View {
   @State private var sending = false
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Label("Question", systemImage: "questionmark.bubble")
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
+    VStack(alignment: .leading, spacing: 0) {
+      Text("Question")
+        .font(.ui(13.5))
+        .foregroundStyle(Color.text2)
+        .padding(.bottom, 2)
       if item.pending { pendingBody } else { answeredBody }
     }
-    .padding(16)
-    .background(.background.secondary, in: .rect(cornerRadius: 24))
+    .padding(.horizontal, 18)
+    .padding(.top, 16)
+    .padding(.bottom, 18)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color.line))
   }
 
   private var answeredBody: some View {
     let answers = Answers.parse(item.answer)
     return ForEach(item.questions, id: \.question) { q in
-      VStack(alignment: .leading, spacing: 4) {
-        Text(q.question).font(.subheadline).foregroundStyle(.secondary)
-        Text(answers[q.question] ?? (item.status == "cancelled" ? String(localized: "Skipped") : ""))
-      }
+      Text(q.question)
+        .font(.ui(15))
+        .foregroundStyle(Color.text2)
+        .padding(.top, 10)
+      Text(answers[q.question] ?? (item.status == "cancelled" ? String(localized: "Skipped") : ""))
+        .font(.ui(16.5))
+        .foregroundStyle(Color.text1)
+        .padding(.top, 2)
     }
   }
 
   private var pendingBody: some View {
-    VStack(alignment: .leading, spacing: 18) {
+    VStack(alignment: .leading, spacing: 0) {
       ForEach(item.questions, id: \.question) { q in
-        VStack(alignment: .leading, spacing: 8) {
-          Text(q.question).font(.headline)
+        Text(q.question)
+          .font(.ui(15))
+          .foregroundStyle(Color.text1)
+          .padding(.top, 10)
+        FlowLayout(spacing: 8) {
           ForEach(q.options, id: \.label) { o in
             let on = picked[q.question]?.contains(o.label) == true
             Button {
               toggle(q, o.label)
             } label: {
-              HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                  Text(o.label).fontWeight(.medium)
-                  if let d = o.description {
-                    Text(d).font(.footnote).foregroundStyle(.secondary)
-                  }
+              VStack(alignment: .leading, spacing: 1) {
+                Text(o.label).font(.ui(15))
+                if let d = o.description {
+                  Text(d).font(.ui(13)).opacity(0.7)
                 }
-                Spacer(minLength: 8)
-                Image(systemName: on ? "checkmark.circle.fill" : "circle")
-                  .foregroundStyle(on ? AnyShapeStyle(.tint) : AnyShapeStyle(.tertiary))
-                  .contentTransition(.symbolEffect(.replace))
               }
               .multilineTextAlignment(.leading)
+              .foregroundStyle(on ? Color.onInk : Color.text1)
               .padding(.horizontal, 14)
-              .padding(.vertical, 10)
-              .frame(maxWidth: .infinity, alignment: .leading)
-              .contentShape(.rect)
+              .padding(.vertical, 8)
+              .background(on ? Color.ink : Color.surface, in: .rect(cornerRadius: 16))
+              .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(on ? Color.ink : Color.line))
             }
-            .buttonStyle(.plain)
-            .glassEffect(on ? .regular.tint(.accentColor.opacity(0.25)).interactive() : .regular.interactive(), in: .rect(cornerRadius: 16))
+            .buttonStyle(PressStyle())
             .sensoryFeedback(.selection, trigger: on)
           }
-          TextField("Something else", text: Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 }), axis: .vertical)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.fill.tertiary, in: .rect(cornerRadius: 16))
         }
+        .padding(.top, 10)
+        TextField("Other", text: Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 }), axis: .vertical)
+          .font(.ui(16))
+          .padding(.horizontal, 14)
+          .padding(.vertical, 11)
+          .background(Color.surface, in: .rect(cornerRadius: 16))
+          .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.line))
+          .padding(.top, 10)
+          .padding(.bottom, 6)
       }
-      GlassEffectContainer(spacing: 10) {
-        HStack(spacing: 10) {
-          Button { submit(skip: true) } label: { Text("Skip").frame(maxWidth: .infinity) }
-            .buttonStyle(.glass)
-          Button { submit(skip: false) } label: { Text("Send").fontWeight(.semibold).frame(maxWidth: .infinity) }
-            .buttonStyle(.glassProminent)
-            .disabled(!ready)
-        }
-        .controlSize(.large)
+      HStack(spacing: 10) {
+        Button("Skip") { submit(skip: true) }
+          .buttonStyle(OutlineButtonStyle())
+        Button("Submit") { submit(skip: false) }
+          .buttonStyle(InkButtonStyle())
+          .disabled(!ready)
       }
       .disabled(sending)
+      .padding(.top, 14)
     }
   }
 
@@ -403,18 +426,62 @@ struct AskCard: View {
   }
 }
 
+// Lays children out in rows, wrapping like inline content.
+struct FlowLayout: Layout {
+  var spacing: CGFloat = 8
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let width = proposal.width ?? .infinity
+    var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, widest: CGFloat = 0
+    for v in subviews {
+      let s = v.sizeThatFits(ProposedViewSize(width: width, height: nil))
+      if x > 0, x + s.width > width {
+        y += rowHeight + spacing
+        x = 0
+        rowHeight = 0
+      }
+      x += s.width + spacing
+      rowHeight = max(rowHeight, s.height)
+      widest = max(widest, x - spacing)
+    }
+    return CGSize(width: min(widest, width), height: y + rowHeight)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+    for v in subviews {
+      let s = v.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil))
+      if x > bounds.minX, x + s.width > bounds.maxX {
+        y += rowHeight + spacing
+        x = bounds.minX
+        rowHeight = 0
+      }
+      v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+      x += s.width + spacing
+      rowHeight = max(rowHeight, s.height)
+    }
+  }
+}
+
 struct NoticeView: View {
   let item: NoticeItem
 
   var body: some View {
-    Label(text, systemImage: item.level == "error" ? "exclamationmark.triangle" : "info.circle")
-      .font(.footnote)
-      .foregroundStyle(item.level == "error" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-      .frame(maxWidth: .infinity)
-  }
-
-  private var text: String {
-    item.code == "interrupted" ? String(localized: "Interrupted") : item.text
+    if item.level == "error" {
+      Text(item.text)
+        .font(.ui(14))
+        .foregroundStyle(Color.fRed)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.fRed.opacity(0.08), in: .rect(cornerRadius: 16))
+    } else {
+      Text(item.code == "interrupted" ? String(localized: "Interrupted") : item.text)
+        .font(.ui(14))
+        .foregroundStyle(Color.text3)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+    }
   }
 }
 
@@ -423,15 +490,15 @@ struct TaskRow: View {
 
   var body: some View {
     let event = item.status == nil
-    HStack(spacing: 8) {
-      Image(systemName: event ? "waveform.path.ecg" : item.status == "completed" ? "checkmark.circle" : item.status == "failed" ? "xmark.octagon" : "stop.circle")
-        .foregroundStyle(item.status == "failed" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-      Text(title).fontWeight(.medium)
-      Text(event ? item.summary.replacingOccurrences(of: "Monitor event: ", with: "") : item.summary)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
+    HStack(spacing: 6) {
+      Image(systemName: event ? "waveform.path.ecg" : item.status == "completed" ? "checkmark.circle" : item.status == "failed" ? "xmark.circle" : "stop.circle")
+        .font(.ui(15))
+      Text(title).foregroundStyle(item.status == "failed" ? Color.fRed : Color.text2)
+        + Text(verbatim: " " + (event ? item.summary.replacingOccurrences(of: "Monitor event: ", with: "") : item.summary))
     }
-    .font(.subheadline)
+    .font(.ui(14.5))
+    .foregroundStyle(Color.text2)
+    .lineLimit(1)
   }
 
   private var title: LocalizedStringKey {
@@ -444,24 +511,38 @@ struct TaskRow: View {
   }
 }
 
-struct WorkingIndicator: View {
+// Three orange dots and the time the turn has run.
+struct ThinkingIndicator: View {
   let since: Date?
 
   var body: some View {
-    TimelineView(.periodic(from: .now, by: 1)) { context in
+    TimelineView(.animation(minimumInterval: 1 / 30)) { context in
+      let t = context.date.timeIntervalSinceReferenceDate
+      let secs = Int(max(0, context.date.timeIntervalSince(since ?? context.date)))
       HStack(spacing: 8) {
-        Image(systemName: "sparkle")
-          .symbolEffect(.breathe, options: .repeat(.continuous))
-          .foregroundStyle(.tint)
-        Text("Working")
-        if let since {
-          Text(Duration.seconds(max(0, context.date.timeIntervalSince(since))), format: .units(allowed: [.minutes, .seconds], width: .narrow))
-            .monospacedDigit()
+        HStack(spacing: 4) {
+          ForEach(0..<3) { i in
+            let phase = (t - Double(i) * 0.15).truncatingRemainder(dividingBy: 1.2) / 1.2
+            let lift = max(0, sin(phase * 2 * .pi))
+            Circle()
+              .fill(Color.claude)
+              .frame(width: 5.5, height: 5.5)
+              .opacity(0.35 + 0.65 * lift)
+              .scaleEffect(0.8 + 0.2 * lift)
+          }
         }
+        .frame(width: 26, alignment: .leading)
+        Text(verbatim: "\(Self.duration(secs)) · ") + Text(secs < 20 ? LocalizedStringKey("Thinking…") : LocalizedStringKey("Still thinking…"))
       }
-      .font(.subheadline)
-      .foregroundStyle(.secondary)
+      .font(.ui(13.5))
+      .foregroundStyle(Color.text2)
     }
+  }
+
+  static func duration(_ s: Int) -> String {
+    if s < 60 { return String(localized: "\(s)s") }
+    let m = s / 60
+    return m < 60 ? String(localized: "\(m)m \(s % 60)s") : String(localized: "\(m / 60)h \(m % 60)m")
   }
 }
 
@@ -472,8 +553,8 @@ struct RemoteImage: View {
     AsyncImage(url: url) { phase in
       switch phase {
       case .success(let image): image.resizable().scaledToFill()
-      case .failure: Image(systemName: "photo").foregroundStyle(.secondary)
-      default: Rectangle().fill(.fill.tertiary)
+      case .failure: Image(systemName: "photo").foregroundStyle(Color.text3)
+      default: Rectangle().fill(Color.fillGray)
       }
     }
   }

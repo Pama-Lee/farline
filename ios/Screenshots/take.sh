@@ -19,25 +19,41 @@ xcrun simctl install "$SIM" "$APP"
 # Skip the keyboard's first-run "slide to type" card.
 xcrun simctl spawn "$SIM" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
 
+running() { pgrep -f 'Farline.app/Farline' >/dev/null; }
+
+# The first launches after boot are slow enough that the simulator can kill
+# the app before it draws: launch once to warm up.
+xcrun simctl launch "$SIM" "$BUNDLE" >/dev/null || true
+sleep 20
+
 shot() {
   local name=$1 appearance=$2
   shift 2
   xcrun simctl ui "$SIM" appearance "$appearance"
-  xcrun simctl terminate "$SIM" "$BUNDLE" 2>/dev/null || true
-  env "$@" xcrun simctl launch "$SIM" "$BUNDLE" -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN >/dev/null
-  sleep 8
-  xcrun simctl io "$SIM" screenshot "$OUT/$name.png"
-  # A blank launch screen is a few KB: show where the main thread is stuck,
-  # then give it more time.
-  if [ "$(stat -f%z "$OUT/$name.png")" -lt 120000 ]; then
-    echo "$name came out blank"
-    local pid
-    pid=$(pgrep -f 'Farline.app/Farline' | head -1 || true)
-    [ -n "$pid" ] && { sample "$pid" 1 2>/dev/null | sed -n '/Call graph/,$p' | head -60 || true; }
-    sleep 10
+  for attempt in 1 2 3; do
+    xcrun simctl terminate "$SIM" "$BUNDLE" 2>/dev/null || true
+    env "$@" xcrun simctl launch "$SIM" "$BUNDLE" -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN >/dev/null || true
+    sleep 8
+    # Not running: it crashed or was killed while launching.
+    if ! running; then
+      echo "$name: app not running (attempt $attempt)"
+      local report
+      report=$(ls -t ~/Library/Logs/DiagnosticReports/Farline* 2>/dev/null | head -1 || true)
+      [ -n "$report" ] && { echo "$report"; head -c 4000 "$report"; echo; } || true
+      continue
+    fi
     xcrun simctl io "$SIM" screenshot "$OUT/$name.png"
-  fi
-  echo "took $name"
+    # A blank launch screen is a few KB: give it more time.
+    if [ "$(stat -f%z "$OUT/$name.png")" -lt 120000 ]; then
+      echo "$name: still on the launch screen (attempt $attempt)"
+      sleep 10
+      xcrun simctl io "$SIM" screenshot "$OUT/$name.png"
+    fi
+    echo "took $name"
+    return
+  done
+  echo "could not take $name"
+  return 1
 }
 
 S=SIMCTL_CHILD_FARLINE_SERVER=http://127.0.0.1:4010

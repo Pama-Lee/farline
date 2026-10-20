@@ -7,6 +7,11 @@ on:
   pull_request:
     paths: ['ios/**', '.github/workflows/ios.yml']
 
+# A newer push supersedes the run before it, so older screenshots never land last.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-26

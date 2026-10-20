@@ -159,6 +159,8 @@ final class RecentPhotos {
   var assets: [PHAsset] = []
 
   func load() async {
+    // Screenshots can't answer the system prompt (simctl's grant doesn't cover it).
+    if ProcessInfo.processInfo.environment["FARLINE_SHEET"] != nil, PHPhotoLibrary.authorizationStatus(for: .readWrite) == .notDetermined { return }
     let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
     guard status == .authorized || status == .limited else { return }
     let options = PHFetchOptions()

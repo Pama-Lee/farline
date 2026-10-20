@@ -18,9 +18,6 @@ xcrun simctl status_bar "$SIM" override --time 9:41 --batteryState charged --bat
 xcrun simctl install "$SIM" "$APP"
 # Skip the keyboard's first-run "slide to type" card.
 xcrun simctl spawn "$SIM" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
-# The context sheet lists recent photos: answer the library prompt up front.
-xcrun simctl privacy "$SIM" grant photos "$BUNDLE" || echo "photos grant failed"
-xcrun simctl privacy "$SIM" grant all "$BUNDLE" || echo "grant all failed"
 
 running() { pgrep -f 'Farline.app/Farline' >/dev/null; }
 

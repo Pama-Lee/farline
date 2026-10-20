@@ -139,6 +139,7 @@ final class APIClient: Sendable {
     let model: String
     let permissionMode: PermissionMode
     let effort: EffortLevel?
+    let classifierModel: String?
   }
 
   func createSession(_ body: CreateBody) async throws -> String {
@@ -178,8 +179,10 @@ final class APIClient: Sendable {
 
   struct SessionChange: Encodable {
     var permissionMode: PermissionMode?
+    var provider: String?
     var model: String?
     var effort: EffortLevel?
+    var classifierModel: String?
     var title: String?
     var hidden: Bool?
   }

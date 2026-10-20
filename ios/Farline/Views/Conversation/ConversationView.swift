@@ -171,19 +171,32 @@ struct ConversationView: View {
           placeholder: "Reply",
           api: model.api,
           running: model.busy,
-          modelLabel: app.catalog.models(for: state.provider).first { $0.value == state.model }?.label ?? state.model,
+          modelLabel: app.catalog.current(provider: state.provider, model: state.model)?.label ?? state.model,
           effortLabel: effortLabel(state),
+          mode: Binding(get: { state.permissionMode }, set: { m in perform { try await model.update(.init(permissionMode: m)) } }),
           draft: Binding(get: { model.draft }, set: { model.draft = $0 }),
           onSend: { text, uploads in try await model.send(text, uploads: uploads) },
           onStop: { await model.interrupt() }
         ) {
-          ModelMenuContent(
+          ModelSheet(
             catalog: app.catalog,
-            canChangeProvider: false,
-            provider: .constant(state.provider),
-            model: Binding(get: { state.model }, set: { m in perform { try await model.update(.init(model: m)) } }),
-            effort: Binding(get: { state.effort ?? .xhigh }, set: { e in perform { try await model.update(.init(effort: e)) } }),
-            mode: Binding(get: { state.permissionMode }, set: { m in perform { try await model.update(.init(permissionMode: m)) } })
+            provider: state.provider,
+            model: state.model,
+            effort: state.effort,
+            classifierModel: state.classifierModel,
+            lockAgent: true,
+            onModel: { m in
+              perform {
+                if m.provider == state.provider {
+                  try await model.update(.init(model: m.value))
+                } else {
+                  try await model.update(.init(provider: m.provider, model: m.value))
+                  withAnimation { toast = String(localized: "Switched to \(m.label)") }
+                }
+              }
+            },
+            onEffort: { e in perform { try await model.update(.init(effort: e)) } },
+            onClassifier: { c in perform { try await model.update(.init(classifierModel: c)) } }
           )
         }
       }
@@ -193,9 +206,8 @@ struct ConversationView: View {
   }
 
   private func effortLabel(_ state: SessionState) -> LocalizedStringKey? {
-    let current = app.catalog.models(for: state.provider).first { $0.value == state.model }
-    guard current?.efforts?.isEmpty == false else { return nil }
-    return (state.effort ?? .xhigh).title
+    guard let effort = state.effort, app.catalog.current(provider: state.provider, model: state.model)?.efforts?.isEmpty == false else { return nil }
+    return effort.title
   }
 
   @ViewBuilder

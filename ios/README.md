@@ -9,7 +9,7 @@ A native SwiftUI client for a Farline server, built for iOS 26. It looks like th
 - New session: pick a folder on the device, then the first message starts it
 - Conversation: Markdown replies with highlighted code, tool steps folded into one line with a timeline sheet, thinking, background task notices
 - Permission requests pinned above the composer, agent questions inline, with haptics
-- The composer card: photos and files, model and effort, dictation, send, stop
+- The composer card: photos, files and permissions, the model sheet (agent, provider, model, effort), dictation, send, stop
 - Copy, read aloud, react and edit under the last reply; rename, copy ID, share link, hide
 - Rewind to before a message (conversation, code, or both) and edit the last reply
 - English and Simplified Chinese

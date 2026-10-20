@@ -98,6 +98,7 @@ const catalog = {
   providers: [
     { id: 'claude', label: 'Anthropic' },
     { id: 'deepseek', label: 'DeepSeek', classifierModels: ['deepseek-v4-flash'] },
+    { id: 'pi:openrouter', label: 'pi · OpenRouter' },
   ],
   models: [
     { provider: 'claude', value: 'default', label: 'Opus 5.5', efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
@@ -105,6 +106,7 @@ const catalog = {
     { provider: 'claude', value: 'claude-haiku-5-5', label: 'Haiku 5.5' },
     { provider: 'deepseek', value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
     { provider: 'deepseek', value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+    { provider: 'pi:openrouter', value: 'openai/gpt-5.5', label: 'GPT-5.5' },
   ],
 }
 

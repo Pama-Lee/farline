@@ -277,6 +277,16 @@
         }
       }
     },
+    "Auto mode check": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动模式判断"
+          }
+        }
+      }
+    },
     "Background task failed": {
       "localizations": {
         "zh-Hans": {
@@ -391,6 +401,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "选择目录"
+          }
+        }
+      }
+    },
+    "Choose model": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择模型"
           }
         }
       }
@@ -1713,6 +1733,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "子任务进行中"
+          }
+        }
+      }
+    },
+    "Switched to %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已切换到 %@"
           }
         }
       }

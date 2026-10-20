@@ -63,6 +63,7 @@ shot session light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1
 shot done light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s4
 shot ask light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s2
 shot steps-sheet light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1 SIMCTL_CHILD_FARLINE_SHEET=steps
+shot model-sheet light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1 SIMCTL_CHILD_FARLINE_SHEET=models
 shot device-sheet light $S SIMCTL_CHILD_FARLINE_SHEET=device
 shot settings-sheet light $S SIMCTL_CHILD_FARLINE_SHEET=settings
 shot history-sheet light $S SIMCTL_CHILD_FARLINE_SHEET=history

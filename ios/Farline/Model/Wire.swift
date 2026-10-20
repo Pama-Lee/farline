@@ -268,8 +268,14 @@ struct ModelOption: Codable, Hashable, Sendable, Identifiable {
   let desc: String?
   let more: Bool?
   let efforts: [EffortLevel]?
+  // The full id an alias like "opus" stands for.
+  let resolved: String?
 
   var id: String { "\(provider)/\(value)" }
+
+  func isCurrent(provider: String, model: String) -> Bool {
+    self.provider == provider && (value == model || (resolved != nil && resolved == model))
+  }
 }
 
 struct ProviderInfo: Codable, Hashable, Sendable, Identifiable {
@@ -287,6 +293,15 @@ struct Catalog: Codable, Sendable {
 
   func models(for provider: String) -> [ModelOption] {
     models.filter { $0.provider == provider }
+  }
+
+  func current(provider: String, model: String) -> ModelOption? {
+    models.first { $0.isCurrent(provider: provider, model: model) }
+  }
+
+  // Providers that have models, as the web's picker offers them.
+  var pickable: [ProviderInfo] {
+    providers.filter { p in models.contains { $0.provider == p.id } }
   }
 
   func label(for provider: String) -> String {

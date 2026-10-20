@@ -7,22 +7,24 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-struct Composer<ModelMenu: View>: View {
+struct Composer<Models: View>: View {
   let placeholder: LocalizedStringKey
   let api: APIClient
   let running: Bool
   let modelLabel: String
   let effortLabel: LocalizedStringKey?
+  @Binding var mode: PermissionMode
   @Binding var draft: String?
   let onSend: (String, [String]) async throws -> Void
   let onStop: () async -> Void
-  @ViewBuilder let modelMenu: () -> ModelMenu
+  @ViewBuilder let modelSheet: () -> Models
 
   @State private var text = ""
   @State private var attachments: [Attachment] = []
   @State private var photoItems: [PhotosPickerItem] = []
   @State private var showPhotos = false
   @State private var showFiles = false
+  @State private var showModels = ProcessInfo.processInfo.environment["FARLINE_SHEET"] == "models"
   @State private var sending = false
   @State private var sent = 0
   @State private var error: String?
@@ -75,16 +77,25 @@ struct Composer<ModelMenu: View>: View {
         .padding(.bottom, 12)
 
       HStack(spacing: 9) {
+        // Attachments and permissions, as the web's context sheet.
         Menu {
           Button("Photos", systemImage: "photo.on.rectangle") { showPhotos = true }
           Button("Files", systemImage: "folder") { showFiles = true }
+          Picker(selection: $mode) {
+            ForEach(PermissionMode.allCases) { m in
+              Label(m.title, systemImage: m.symbol).tag(m)
+            }
+          } label: {
+            Label("Permissions", systemImage: mode.symbol)
+          }
+          .pickerStyle(.menu)
         } label: {
           round("plus", size: 36, font: .ui(19, .light))
         }
         .accessibilityLabel(Text("Add"))
 
-        Menu {
-          modelMenu()
+        Button {
+          showModels = true
         } label: {
           HStack(spacing: 5) {
             Text(verbatim: modelLabel)
@@ -101,7 +112,8 @@ struct Composer<ModelMenu: View>: View {
           .frame(height: 36)
           .background(Color.fillGray, in: .capsule)
         }
-        .menuOrder(.fixed)
+        .buttonStyle(PressStyle())
+        .sheet(isPresented: $showModels, content: modelSheet)
 
         Spacer(minLength: 0)
 
@@ -297,70 +309,6 @@ struct Composer<ModelMenu: View>: View {
       } catch {
         withAnimation { self.error = error.localizedDescription }
       }
-    }
-  }
-}
-
-// Model, effort and permissions, as a native menu behind the model pill.
-struct ModelMenuContent: View {
-  let catalog: Catalog
-  let canChangeProvider: Bool
-  let provider: Binding<String>
-  let model: Binding<String>
-  let effort: Binding<EffortLevel>
-  let mode: Binding<PermissionMode>
-
-  var body: some View {
-    let all = catalog.models(for: provider.wrappedValue)
-    let current = all.first { $0.value == model.wrappedValue }
-    if canChangeProvider && catalog.providers.count > 1 {
-      Picker(selection: provider) {
-        ForEach(catalog.providers) { p in
-          Text(verbatim: p.label).tag(p.id)
-        }
-      } label: {
-        Label("Provider", systemImage: "server.rack")
-      }
-      .pickerStyle(.menu)
-    }
-    Section(catalog.label(for: provider.wrappedValue)) {
-      Picker("Model", selection: model) {
-        ForEach(all.filter { $0.more != true }) { m in
-          Text(verbatim: m.label).tag(m.value)
-        }
-      }
-      .pickerStyle(.inline)
-      let more = all.filter { $0.more == true }
-      if !more.isEmpty {
-        Picker(selection: model) {
-          ForEach(more) { m in
-            Text(verbatim: m.label).tag(m.value)
-          }
-        } label: {
-          Label("More models", systemImage: "ellipsis.circle")
-        }
-        .pickerStyle(.menu)
-      }
-    }
-    Section {
-      if let efforts = current?.efforts, !efforts.isEmpty {
-        Picker(selection: effort) {
-          ForEach(efforts) { e in
-            Text(e.title).tag(e)
-          }
-        } label: {
-          Label("Effort", systemImage: "gauge.with.dots.needle.67percent")
-        }
-        .pickerStyle(.menu)
-      }
-      Picker(selection: mode) {
-        ForEach(PermissionMode.allCases) { m in
-          Label(m.title, systemImage: m.symbol).tag(m)
-        }
-      } label: {
-        Label("Permissions", systemImage: mode.wrappedValue.symbol)
-      }
-      .pickerStyle(.menu)
     }
   }
 }

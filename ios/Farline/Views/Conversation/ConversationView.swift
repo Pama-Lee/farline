@@ -50,7 +50,7 @@ struct ConversationView: View {
     .defaultScrollAnchor(.bottom, for: .sizeChanges)
     .scrollDismissesKeyboard(.interactively)
     .onScrollGeometryChange(for: Bool.self) { geo in
-      geo.contentOffset.y + geo.containerSize.height >= geo.contentSize.height - 80
+      geo.visibleRect.maxY >= geo.contentSize.height - 80
     } action: { _, bottom in
       atBottom = bottom
     }

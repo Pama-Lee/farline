@@ -99,7 +99,7 @@ struct ContextSheet: View {
     }
     .padding(.top, 18)
     .presentationDetents([.fraction(0.5), .large])
-    .presentationDragIndicator(.visible)
+    .farlineSheet()
     .task { await recent.load() }
   }
 

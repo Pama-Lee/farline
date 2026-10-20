@@ -10,7 +10,7 @@ struct SessionsView: View {
   @State private var sessions: [SessionSummary] = []
   @State private var loaded = false
   @State private var loadError: String?
-  @State private var selection: String?
+  @State private var selection: String? = ProcessInfo.processInfo.environment["FARLINE_OPEN_SESSION"]
   @State private var search = ""
   @State private var showNew = false
   @State private var showSettings = false

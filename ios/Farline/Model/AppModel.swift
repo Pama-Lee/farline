@@ -25,7 +25,9 @@ final class AppModel {
   var serverURL: URL? { api?.base }
 
   init() {
-    if let saved = UserDefaults.standard.string(forKey: Self.serverKey), let url = URL(string: saved) {
+    // FARLINE_SERVER points a run at a server without saving it (screenshots, UI work).
+    let saved = ProcessInfo.processInfo.environment["FARLINE_SERVER"] ?? UserDefaults.standard.string(forKey: Self.serverKey)
+    if let saved, let url = URL(string: saved) {
       api = APIClient(base: url)
     }
   }

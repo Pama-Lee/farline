@@ -211,7 +211,6 @@ final class APIClient: Sendable {
     req.timeoutInterval = 60
     let request = req
     let session = self.session
-    let request = req
     return AsyncThrowingStream { continuation in
       let task = Task {
         do {

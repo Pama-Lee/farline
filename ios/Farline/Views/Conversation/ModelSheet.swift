@@ -42,82 +42,23 @@ struct ModelSheet: View {
     }
   }
 
+  private var inTab: [ModelOption] { catalog.models(for: shown) }
+  private var main: [ModelOption] { inTab.filter { $0.more != true } }
+  private var more: [ModelOption] { inTab.filter { $0.more == true } }
+
   var body: some View {
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: 0) {
-          if agents.count > 1 {
-            Picker(selection: Binding(get: { Agent(provider: shown) }, set: pickAgent)) {
-              ForEach(agents) { a in
-                Text(verbatim: a.name).tag(a)
-              }
-            } label: {
-              EmptyView()
-            }
-            .pickerStyle(.segmented)
-            .padding(.bottom, 14)
-          }
-          if available.count > 1 {
-            WrapLayout(spacing: 8) {
-              ForEach(available) { p in
-                chip(p)
-              }
-            }
-            .padding(.bottom, 12)
-          }
-
-          let inTab = catalog.models(for: shown)
-          let main = inTab.filter { $0.more != true }
-          let more = inTab.filter { $0.more == true }
+          if agents.count > 1 { agentPicker }
+          if available.count > 1 { chips }
           if !main.isEmpty {
-            OptionGroup(main) { m in
-              row(m)
-            }
+            OptionGroup(main) { m in row(m) }
           }
           VStack(spacing: 16) {
-            if shown == provider, let effort, current?.efforts?.isEmpty == false {
-              NavigationLink {
-                ChoiceList(title: "Effort", options: current?.efforts ?? EffortLevel.allCases, selected: effort) { e in
-                  Text(e.title)
-                } onPick: { e in
-                  onEffort(e)
-                }
-              } label: {
-                ValueRow(title: "Effort") { Text(effort.title) }
-              }
-            }
-            if shown == provider, classifiers.count > 1 {
-              NavigationLink {
-                ChoiceList(title: "Auto mode check", options: classifiers.map(\.value), selected: classifierModel) { v in
-                  Text(verbatim: classifiers.first { $0.value == v }?.label ?? v)
-                } onPick: { v in
-                  onClassifier(v)
-                }
-              } label: {
-                ValueRow(title: "Auto mode check") {
-                  Text(verbatim: classifiers.first { $0.value == classifierModel }?.label ?? "")
-                }
-              }
-            }
-            if !more.isEmpty {
-              NavigationLink {
-                ScrollView {
-                  OptionGroup(more) { m in
-                    row(m)
-                  }
-                  .padding(16)
-                }
-                .background(Color.bg)
-                .navigationTitle("More models")
-                .navigationBarTitleDisplayMode(.inline)
-              } label: {
-                ValueRow(title: "More models") {
-                  if let current, current.more == true, current.provider == shown {
-                    Text(verbatim: current.label)
-                  }
-                }
-              }
-            }
+            effortLink
+            classifierLink
+            moreLink
           }
           .buttonStyle(PressStyle())
           .padding(.top, main.isEmpty ? 0 : 14)
@@ -138,6 +79,68 @@ struct ModelSheet: View {
     }
     .presentationDetents([.medium, .large])
     .farlineSheet()
+  }
+
+  private var agentPicker: some View {
+    Picker(selection: Binding(get: { Agent(provider: shown) }, set: { pickAgent($0) })) {
+      ForEach(agents) { a in
+        Text(verbatim: a.name).tag(a)
+      }
+    } label: {
+      EmptyView()
+    }
+    .pickerStyle(.segmented)
+    .padding(.bottom, 14)
+  }
+
+  private var chips: some View {
+    WrapLayout(spacing: 8) {
+      ForEach(available) { p in
+        chip(p)
+      }
+    }
+    .padding(.bottom, 12)
+  }
+
+  @ViewBuilder
+  private var effortLink: some View {
+    if shown == provider, let effort, let efforts = current?.efforts, !efforts.isEmpty {
+      NavigationLink {
+        ChoiceList(title: "Effort", options: efforts, selected: effort, label: { (e: EffortLevel) in Text(e.title) }, onPick: onEffort)
+      } label: {
+        ValueRow(title: "Effort", value: Text(effort.title))
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var classifierLink: some View {
+    if shown == provider, classifiers.count > 1 {
+      let labels = Dictionary(classifiers.map { ($0.value, $0.label) }, uniquingKeysWith: { a, _ in a })
+      NavigationLink {
+        ChoiceList(title: "Auto mode check", options: classifiers.map(\.value), selected: classifierModel, label: { (v: String) in Text(verbatim: labels[v] ?? v) }, onPick: onClassifier)
+      } label: {
+        ValueRow(title: "Auto mode check", value: Text(verbatim: classifierModel.flatMap { labels[$0] } ?? ""))
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var moreLink: some View {
+    if !more.isEmpty {
+      let chosen = current.flatMap { $0.more == true && $0.provider == shown ? $0.label : nil }
+      NavigationLink {
+        ScrollView {
+          OptionGroup(more) { m in row(m) }
+            .padding(16)
+        }
+        .background(Color.bg)
+        .navigationTitle("More models")
+        .navigationBarTitleDisplayMode(.inline)
+      } label: {
+        ValueRow(title: "More models", value: Text(verbatim: chosen ?? ""))
+      }
+    }
   }
 
   private func pickAgent(_ a: Agent) {
@@ -220,11 +223,11 @@ private struct OptionGroup<Row: View>: View {
 }
 
 // A pushed list with a check on the chosen one; picking goes back.
-private struct ChoiceList<Value: Hashable, RowLabel: View>: View {
+private struct ChoiceList<Value: Hashable>: View {
   let title: LocalizedStringKey
   let options: [Value]
   let selected: Value?
-  @ViewBuilder let label: (Value) -> RowLabel
+  let label: (Value) -> Text
   let onPick: (Value) -> Void
 
   @Environment(\.dismiss) private var dismiss
@@ -269,9 +272,9 @@ private struct ChoiceList<Value: Hashable, RowLabel: View>: View {
 }
 
 // The web's .row-btn: a white pill with the value and a chevron.
-private struct ValueRow<Value: View>: View {
+private struct ValueRow: View {
   let title: LocalizedStringKey
-  @ViewBuilder let value: Value
+  let value: Text
 
   var body: some View {
     HStack(spacing: 12) {

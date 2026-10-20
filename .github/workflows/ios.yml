@@ -42,6 +42,8 @@ jobs:
             echo "::endgroup::"
             echo "---- errors ----"
             grep -E "(error|failed):" build.log | sed -E "s#$PWD/##" | sort -u | head -150
+            # A compiler crash prints no "error:" line, only a stack dump.
+            grep -n -E "Stack dump|Program arguments|signal|While (evaluating|type-checking)|Assertion" -A6 build.log | sed -E "s#$PWD/##" | head -60
             exit 1
           fi
           grep -E "(Test (Suite|Case)|✔|✘|\*\* TEST)" build.log | tail -60

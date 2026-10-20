@@ -60,7 +60,9 @@ struct ConversationView: View {
     }
     .background(Color.bg)
     .scrollPosition($scroll)
-    .defaultScrollAnchor(.bottom)
+    // A short thread sits at the top like the web's; a long one opens at the end.
+    .defaultScrollAnchor(.top, for: .alignment)
+    .defaultScrollAnchor(.bottom, for: .initialOffset)
     .defaultScrollAnchor(.bottom, for: .sizeChanges)
     .scrollDismissesKeyboard(.interactively)
     .onScrollGeometryChange(for: Bool.self) { geo in

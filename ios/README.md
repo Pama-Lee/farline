@@ -1,15 +1,16 @@
 # Farline for iOS
 
-A native SwiftUI client for a Farline server, built for iOS 26 and Liquid Glass. It talks to the same HTTP API and event stream as the web app, so the server needs no changes.
+A native SwiftUI client for a Farline server, built for iOS 26. It looks like the web app with the Claude skin (the palette, layout and type sizes in `web/src/styles.css`), but navigation, sheets, menus, search, context menus, dictation and haptics are the system's own, with Liquid Glass where iOS puts it. It talks to the same HTTP API and event stream as the web app, so the server needs no changes.
 
 ## What's in it
 
 - Connect to a server, first-run setup with the setup code, password sign-in
-- Session list with live status, search, swipe to hide; split view on iPad
-- Conversation drawn natively: Markdown replies, folded tool steps with a detail sheet, thinking, background task notices
-- Permission requests and agent questions answered inline, with haptics
-- A floating glass composer: photos and files, send, stop
-- Model, effort and permission mode from the toolbar; rename, share link
+- Home: the device, sessions with live status, search, folder filter, history, swipe to hide
+- New session: pick a folder on the device, then the first message starts it
+- Conversation: Markdown replies with highlighted code, tool steps folded into one line with a timeline sheet, thinking, background task notices
+- Permission requests pinned above the composer, agent questions inline, with haptics
+- The composer card: photos and files, model and effort, dictation, send, stop
+- Copy, read aloud, react and edit under the last reply; rename, copy ID, share link, hide
 - Rewind to before a message (conversation, code, or both) and edit the last reply
 - English and Simplified Chinese
 
@@ -42,5 +43,5 @@ Enter the address the server prints, for example `192.168.1.10:3077` on your net
 
 - `Farline/Model`: wire types (mirroring `shared/types.ts`), the session model (snapshot plus SSE patches), Markdown blocks
 - `Farline/Net`: the API client and the event stream parser
-- `Farline/Views`: connect, sessions, conversation, composer
+- `Farline/Views`: connect, home and its sheets, conversation, composer; `Common/Theme.swift` has the web palette
 - `FarlineTests`: decoding, patches, steps, Markdown, SSE

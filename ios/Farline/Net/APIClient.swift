@@ -209,11 +209,12 @@ final class APIClient: Sendable {
     var req = makeRequest("GET", "/sessions/\(id)/events?since=\(since)")
     req.setValue("text/event-stream", forHTTPHeaderField: "accept")
     req.timeoutInterval = 60
+    let request = req
     let session = self.session
     return AsyncThrowingStream { continuation in
       let task = Task {
         do {
-          let (bytes, response) = try await session.bytes(for: req)
+          let (bytes, response) = try await session.bytes(for: request)
           let status = (response as? HTTPURLResponse)?.statusCode ?? 0
           guard status == 200 else { throw APIError(status: status, message: "event stream \(status)") }
           var parser = EventStreamParser()

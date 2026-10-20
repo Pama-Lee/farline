@@ -16,6 +16,8 @@ xcrun simctl boot "$SIM" 2>/dev/null || true
 xcrun simctl bootstatus "$SIM" -b
 xcrun simctl status_bar "$SIM" override --time 9:41 --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
 xcrun simctl install "$SIM" "$APP"
+# Skip the keyboard's first-run "slide to type" card.
+xcrun simctl spawn "$SIM" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
 
 shot() {
   local name=$1 appearance=$2

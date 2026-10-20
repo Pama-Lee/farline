@@ -295,13 +295,14 @@ struct HistorySheet: View {
 
   // Today, yesterday, this week, this month, earlier.
   private var groups: [(title: String, sessions: [SessionSummary])] {
-    let cal = Calendar.current
-    let now = Date()
+    // Counted back from midnight, as the web does.
+    let today = Calendar.current.startOfDay(for: Date())
     func bucket(_ d: Date) -> Int {
-      if cal.isDateInToday(d) { return 0 }
-      if cal.isDateInYesterday(d) { return 1 }
-      if cal.isDate(d, equalTo: now, toGranularity: .weekOfYear) { return 2 }
-      if cal.isDate(d, equalTo: now, toGranularity: .month) { return 3 }
+      let days = today.timeIntervalSince(d) / 86400
+      if days <= 0 { return 0 }
+      if days <= 1 { return 1 }
+      if days <= 6 { return 2 }
+      if days <= 29 { return 3 }
       return 4
     }
     let titles = [String(localized: "Today"), String(localized: "Yesterday"), String(localized: "This week"), String(localized: "This month"), String(localized: "Earlier")]

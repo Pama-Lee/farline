@@ -27,13 +27,17 @@ shot() {
   env "$@" xcrun simctl launch "$SIM" "$BUNDLE" -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN >/dev/null
   sleep 8
   xcrun simctl io "$SIM" screenshot "$OUT/$name.png"
-  echo "took $name"
-  # A stuck app shows only the white launch screen: print where its main thread is.
-  if [ "$name" = ask ]; then
+  # A blank launch screen is a few KB: show where the main thread is stuck,
+  # then give it more time.
+  if [ "$(stat -f%z "$OUT/$name.png")" -lt 120000 ]; then
+    echo "$name came out blank"
     local pid
     pid=$(pgrep -f 'Farline.app/Farline' | head -1 || true)
-    [ -n "$pid" ] && sample "$pid" 2 2>/dev/null | sed -n '/Call graph/,/Total number/p' | head -120 || true
+    [ -n "$pid" ] && { sample "$pid" 1 2>/dev/null | sed -n '/Call graph/,$p' | head -60 || true; }
+    sleep 10
+    xcrun simctl io "$SIM" screenshot "$OUT/$name.png"
   fi
+  echo "took $name"
 }
 
 S=SIMCTL_CHILD_FARLINE_SERVER=http://127.0.0.1:4010

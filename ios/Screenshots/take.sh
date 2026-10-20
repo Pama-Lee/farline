@@ -18,6 +18,8 @@ xcrun simctl status_bar "$SIM" override --time 9:41 --batteryState charged --bat
 xcrun simctl install "$SIM" "$APP"
 # Skip the keyboard's first-run "slide to type" card.
 xcrun simctl spawn "$SIM" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
+# The context sheet lists recent photos: answer the library prompt up front.
+xcrun simctl privacy "$SIM" grant photos "$BUNDLE" || true
 
 running() { pgrep -f 'Farline.app/Farline' >/dev/null; }
 
@@ -64,6 +66,8 @@ shot done light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s4
 shot ask light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s2
 shot steps-sheet light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1 SIMCTL_CHILD_FARLINE_SHEET=steps
 shot model-sheet light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1 SIMCTL_CHILD_FARLINE_SHEET=models
+shot context-sheet light $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1 SIMCTL_CHILD_FARLINE_SHEET=context
+shot context-sheet-dark dark $S SIMCTL_CHILD_FARLINE_OPEN_SESSION=s1 SIMCTL_CHILD_FARLINE_SHEET=context
 shot device-sheet light $S SIMCTL_CHILD_FARLINE_SHEET=device
 shot settings-sheet light $S SIMCTL_CHILD_FARLINE_SHEET=settings
 shot history-sheet light $S SIMCTL_CHILD_FARLINE_SHEET=history

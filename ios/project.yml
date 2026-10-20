@@ -45,6 +45,8 @@ targets:
         NSLocalNetworkUsageDescription: Farline connects to the Farline server on your network.
         NSMicrophoneUsageDescription: Farline listens while you dictate a message.
         NSSpeechRecognitionUsageDescription: Farline turns what you say into the message you're writing.
+        NSCameraUsageDescription: Farline uses the camera when you take a photo to send.
+        NSPhotoLibraryUsageDescription: Farline shows your recent photos so you can send them.
         # Only standard HTTPS: skips the export compliance question on upload.
         ITSAppUsesNonExemptEncryption: false
     settings:

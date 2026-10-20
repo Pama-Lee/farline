@@ -1,6 +1,7 @@
 // The composer card from the web: text on top, then attach, the model pill,
 // dictation and send (or stop) underneath.
 import AVFoundation
+import Photos
 import PhotosUI
 import Speech
 import SwiftUI
@@ -22,6 +23,9 @@ struct Composer<Models: View>: View {
   @State private var text = ""
   @State private var attachments: [Attachment] = []
   @State private var photoItems: [PhotosPickerItem] = []
+  @State private var showContext = ProcessInfo.processInfo.environment["FARLINE_SHEET"] == "context"
+  @State private var pending: ContextSheet.Action?
+  @State private var showCamera = false
   @State private var showPhotos = false
   @State private var showFiles = false
   @State private var showModels = ProcessInfo.processInfo.environment["FARLINE_SHEET"] == "models"
@@ -34,6 +38,7 @@ struct Composer<Models: View>: View {
   struct Attachment: Identifiable {
     let id = UUID()
     var name: String
+    var assetID: String?
     var preview: UIImage?
     var upload: Upload?
     var failed = false
@@ -77,22 +82,25 @@ struct Composer<Models: View>: View {
         .padding(.bottom, 12)
 
       HStack(spacing: 9) {
-        // Attachments and permissions, as the web's context sheet.
-        Menu {
-          Button("Photos", systemImage: "photo.on.rectangle") { showPhotos = true }
-          Button("Files", systemImage: "folder") { showFiles = true }
-          Picker(selection: $mode) {
-            ForEach(PermissionMode.allCases) { m in
-              Label(m.title, systemImage: m.symbol).tag(m)
-            }
-          } label: {
-            Label("Permissions", systemImage: mode.symbol)
-          }
-          .pickerStyle(.menu)
+        // Attachments and permissions, in the "Add context" sheet.
+        Button {
+          showContext = true
         } label: {
           round("plus", size: 36, font: .ui(19, .light))
         }
+        .buttonStyle(PressStyle())
         .accessibilityLabel(Text("Add"))
+        .sheet(isPresented: $showContext, onDismiss: runPending) {
+          ContextSheet(
+            attached: Set(attachments.compactMap(\.assetID)),
+            mode: $mode,
+            onToggle: toggle,
+            onAction: { action in
+              pending = action
+              showContext = false
+            }
+          )
+        }
 
         Button {
           showModels = true
@@ -174,6 +182,9 @@ struct Composer<Models: View>: View {
     .frame(maxWidth: 760)
     .sensoryFeedback(.impact(weight: .light), trigger: sent)
     .sensoryFeedback(.start, trigger: dictation.on) { _, on in on }
+    .fullScreenCover(isPresented: $showCamera) {
+      CameraPicker { addImage($0) }.ignoresSafeArea()
+    }
     .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 6, matching: .images)
     .fileImporter(isPresented: $showFiles, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
       if case .success(let urls) = result { addFiles(urls) }
@@ -239,6 +250,34 @@ struct Composer<Models: View>: View {
     .padding(.top, 6)
   }
 
+  // Opens what the context sheet asked for, once the sheet is gone.
+  private func runPending() {
+    guard let action = pending else { return }
+    pending = nil
+    switch action {
+    case .camera: showCamera = true
+    case .photos: showPhotos = true
+    case .files: showFiles = true
+    }
+  }
+
+  // A tap on a photo in the sheet's row attaches it; a second tap takes it back.
+  private func toggle(_ asset: PHAsset) {
+    let assetID = asset.localIdentifier
+    if attachments.contains(where: { $0.assetID == assetID }) {
+      attachments.removeAll { $0.assetID == assetID }
+      return
+    }
+    let a = Attachment(name: "photo.jpg", assetID: assetID)
+    attachments.append(a)
+    Task {
+      guard let data = await PhotoLibrary.data(for: asset), let image = UIImage(data: data) else {
+        return mark(a.id, failed: true)
+      }
+      await attach(image, to: a.id)
+    }
+  }
+
   private func addPhotos(_ items: [PhotosPickerItem]) {
     for item in items {
       let a = Attachment(name: "photo.jpg")
@@ -248,12 +287,22 @@ struct Composer<Models: View>: View {
           mark(a.id, failed: true)
           return
         }
-        update(a.id) { $0.preview = image.preparingThumbnail(of: CGSize(width: 160, height: 160)) ?? image }
-        // HEIC and friends become JPEG, which the agent can read.
-        guard let jpeg = image.jpegData(compressionQuality: 0.85) else { return mark(a.id, failed: true) }
-        await upload(a.id, data: jpeg, name: "photo-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg")
+        await attach(image, to: a.id)
       }
     }
+  }
+
+  private func addImage(_ image: UIImage) {
+    let a = Attachment(name: "photo.jpg")
+    attachments.append(a)
+    Task { await attach(image, to: a.id) }
+  }
+
+  private func attach(_ image: UIImage, to id: UUID) async {
+    update(id) { $0.preview = image.preparingThumbnail(of: CGSize(width: 160, height: 160)) ?? image }
+    // HEIC and friends become JPEG, which the agent can read.
+    guard let jpeg = image.jpegData(compressionQuality: 0.85) else { return mark(id, failed: true) }
+    await upload(id, data: jpeg, name: "photo-\(Int(Date().timeIntervalSince1970)).jpg", mime: "image/jpeg")
   }
 
   private func addFiles(_ urls: [URL]) {

@@ -24,6 +24,28 @@
         }
       }
     },
+    "NSCameraUsageDescription": {
+      "comment": "Camera permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照发送时 Farline 需要使用相机。"
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "comment": "Photo library permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farline 会列出你最近的照片，方便直接发送。"
+          }
+        }
+      }
+    },
     "NSSpeechRecognitionUsageDescription": {
       "comment": "Speech recognition permission",
       "localizations": {

@@ -26,6 +26,12 @@ shot() {
   sleep 8
   xcrun simctl io "$SIM" screenshot "$OUT/$name.png"
   echo "took $name"
+  # A stuck app shows only the white launch screen: print where its main thread is.
+  if [ "$name" = ask ]; then
+    local pid
+    pid=$(pgrep -f 'Farline.app/Farline' | head -1 || true)
+    [ -n "$pid" ] && sample "$pid" 2 2>/dev/null | sed -n '/Call graph/,/Total number/p' | head -120 || true
+  fi
 }
 
 S=SIMCTL_CHILD_FARLINE_SERVER=http://127.0.0.1:4010

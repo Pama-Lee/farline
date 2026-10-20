@@ -34,6 +34,7 @@ struct HomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .searchable(text: $search, prompt: Text("Search sessions"))
+        .searchToolbarBehavior(.minimize)
         .refreshable { await load() }
         .navigationDestination(for: Route.self) { route in
           switch route {
@@ -217,10 +218,13 @@ struct HomeView: View {
       Button {
         sheet = .device
       } label: {
-        Label("New session", systemImage: "plus")
-          .labelStyle(.titleAndIcon)
-          .font(.ui(15, .medium))
-          .padding(.horizontal, 4)
+        HStack(spacing: 7) {
+          Image(systemName: "plus")
+          Text("New session")
+        }
+        .font(.ui(15, .medium))
+        .padding(.horizontal, 6)
+        .fixedSize()
       }
       .buttonStyle(.glassProminent)
       .tint(Color.pill)
@@ -253,14 +257,13 @@ struct DeviceChip: View {
 
   var body: some View {
     HStack(spacing: 9) {
-      Image(systemName: "laptopcomputer")
-        .font(.ui(17, .light))
+      LaptopIcon(size: 20, lineWidth: 1.6)
         .overlay(alignment: .topTrailing) {
           Circle()
             .fill(Color.fGreen)
             .frame(width: 9, height: 9)
             .overlay(Circle().stroke(Color.bg, lineWidth: 2))
-            .offset(x: 4, y: -4)
+            .offset(x: 2, y: 1)
         }
       Text(verbatim: name)
         .font(.ui(15))
@@ -289,8 +292,7 @@ struct SessionRow: View {
         HStack(spacing: 5) {
           Text(verbatim: folderName(session.cwd).isEmpty ? device ?? "" : folderName(session.cwd))
             .lineLimit(1)
-          Image(systemName: "laptopcomputer")
-            .font(.ui(12))
+          LaptopIcon(size: 15, lineWidth: 1.7)
             .foregroundStyle(Color.fGreen.opacity(session.status == .idle ? 0.55 : 1))
           if let label = session.providerLabel {
             Tag(text: label)

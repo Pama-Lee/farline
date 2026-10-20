@@ -168,7 +168,7 @@ struct ConversationView: View {
         Composer(
           placeholder: "Reply",
           api: model.api,
-          running: model.running,
+          running: model.busy,
           modelLabel: app.catalog.models(for: state.provider).first { $0.value == state.model }?.label ?? state.model,
           effortLabel: effortLabel(state),
           draft: Binding(get: { model.draft }, set: { model.draft = $0 }),

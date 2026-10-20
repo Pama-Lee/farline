@@ -102,6 +102,24 @@ final class APIClient: Sendable {
     return try await get("/fs?\(c.percentEncodedQuery ?? "")")
   }
 
+  // MARK: - Plugins and agents
+
+  func plugins() async throws -> [PluginInfo] { try await get("/plugins") }
+
+  func setPluginEnabled(_ id: String, _ enabled: Bool) async throws -> PluginInfo {
+    struct Body: Encodable { let enabled: Bool }
+    return try await call("PUT", "/plugins/\(id)/enabled", Body(enabled: enabled))
+  }
+
+  struct AgentList: Decodable {
+    let agents: [AgentStatus]
+  }
+
+  func agents() async throws -> [AgentStatus] {
+    let list: AgentList = try await get("/agents")
+    return list.agents
+  }
+
   // MARK: - Sessions
 
   struct SessionPage: Decodable {

@@ -145,3 +145,40 @@ extension View {
       .background(Color.bg)
   }
 }
+
+// The web's laptop icon (lucide): an outlined screen on a flared base.
+struct LaptopIcon: View {
+  var size: CGFloat = 20
+  var lineWidth: CGFloat = 1.6
+
+  var body: some View {
+    LaptopShape()
+      .stroke(style: StrokeStyle(lineWidth: lineWidth * 24 / size, lineCap: .round, lineJoin: .round))
+      .frame(width: 24, height: 24)
+      .scaleEffect(size / 24)
+      .frame(width: size, height: size)
+  }
+}
+
+private struct LaptopShape: Shape {
+  func path(in rect: CGRect) -> Path {
+    let s = rect.width / 24
+    func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * s, y: rect.minY + y * s) }
+    var path = Path()
+    path.move(to: p(6, 5))
+    path.addLine(to: p(18, 5))
+    path.addQuadCurve(to: p(20, 7), control: p(20, 5))
+    path.addLine(to: p(20, 15.5))
+    path.addLine(to: p(21.28, 18.55))
+    path.addQuadCurve(to: p(20.38, 20), control: p(21.6, 20))
+    path.addLine(to: p(3.62, 20))
+    path.addQuadCurve(to: p(2.72, 18.55), control: p(2.4, 20))
+    path.addLine(to: p(4, 15.5))
+    path.addLine(to: p(4, 7))
+    path.addQuadCurve(to: p(6, 5), control: p(4, 5))
+    path.closeSubpath()
+    path.move(to: p(20, 16))
+    path.addLine(to: p(4, 16))
+    return path
+  }
+}

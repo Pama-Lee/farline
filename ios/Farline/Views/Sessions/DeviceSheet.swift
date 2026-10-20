@@ -124,7 +124,7 @@ private struct ActiveCard: View {
         .foregroundStyle(Color.text2)
       }
       HStack(spacing: 6) {
-        Image(systemName: "laptopcomputer").foregroundStyle(Color.fGreen)
+        LaptopIcon(size: 14, lineWidth: 1.7).foregroundStyle(Color.fGreen)
         Text(verbatim: shortPath(session.cwd))
       }
       .font(.ui(12.5))

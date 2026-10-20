@@ -379,7 +379,7 @@ struct AskCard: View {
           }
         }
         .padding(.top, 10)
-        TextField("Other", text: Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 }), axis: .vertical)
+        TextField("Other", text: Binding(get: { other[q.question] ?? "" }, set: { other[q.question] = $0 }))
           .font(.ui(16))
           .padding(.horizontal, 14)
           .padding(.vertical, 11)

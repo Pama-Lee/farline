@@ -157,6 +157,16 @@
         }
       }
     },
+    "Agent": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
+          }
+        }
+      }
+    },
     "All": {
       "localizations": {
         "zh-Hans": {
@@ -881,6 +891,36 @@
         }
       }
     },
+    "Installed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装"
+          }
+        }
+      }
+    },
+    "Installed %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装 %@"
+          }
+        }
+      }
+    },
+    "Installing…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在安装…"
+          }
+        }
+      }
+    },
     "Interrupted": {
       "localizations": {
         "zh-Hans": {
@@ -1041,6 +1081,16 @@
         }
       }
     },
+    "No plugins": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有插件"
+          }
+        }
+      }
+    },
     "No sessions": {
       "localizations": {
         "zh-Hans": {
@@ -1057,6 +1107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "没有子目录"
+          }
+        }
+      }
+    },
+    "Not installed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未安装"
           }
         }
       }
@@ -1141,12 +1201,12 @@
         }
       }
     },
-    "Plugins, skins and agents": {
+    "Plugins": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "插件、皮肤和 Agent"
+            "value": "插件"
           }
         }
       }

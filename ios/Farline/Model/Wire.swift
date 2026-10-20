@@ -316,6 +316,27 @@ struct Upload: Codable, Hashable, Sendable {
   let isImage: Bool
 }
 
+struct PluginInfo: Codable, Sendable, Identifiable {
+  let id: String
+  let name: String
+  let version: String
+  let enabled: Bool
+  let state: String
+  let error: String?
+  let skin: Bool?
+
+  var active: Bool { state == "active" }
+}
+
+struct AgentStatus: Codable, Sendable, Identifiable {
+  let id: String
+  let name: String
+  let homepage: String?
+  let installed: Bool
+  let version: String?
+  let installing: Bool?
+}
+
 struct DeviceInfo: Codable, Sendable {
   struct Prefs: Codable, Sendable {
     let lastCwd: String?

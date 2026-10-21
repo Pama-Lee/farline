@@ -11,6 +11,11 @@ struct ConversationView: View {
   @State private var model: SessionModel
   @State private var scroll = ScrollPosition(edge: .bottom)
   @State private var atBottom = true
+  // Follow the end of the thread until the user scrolls away from it. Only a
+  // drag changes this, so the keyboard, the composer growing or rows measuring
+  // themselves can't push the thread up on their own.
+  @State private var stick = true
+  @State private var dragging = false
   @State private var openSteps: SheetID? = ProcessInfo.processInfo.environment["FARLINE_SHEET"] == "steps" ? SheetID(id: "") : nil
   @State private var editing: TextItem?
   @State private var rewinding: UserItem?
@@ -69,6 +74,17 @@ struct ConversationView: View {
       geo.visibleRect.maxY >= geo.contentSize.height - 80
     } action: { _, bottom in
       atBottom = bottom
+      if dragging { stick = bottom }
+    }
+    .onScrollPhaseChange { _, phase in
+      dragging = phase == .interacting || phase == .decelerating
+      if phase == .idle { stick = atBottom }
+    }
+    // The content or the space for it changed size: stay at the end if we were there.
+    .onScrollGeometryChange(for: [CGFloat].self) { geo in
+      [geo.contentSize.height, geo.containerSize.height, geo.contentInsets.bottom]
+    } action: { _, _ in
+      if stick && !dragging { scroll.scrollTo(edge: .bottom) }
     }
     .overlay {
       if model.state == nil {
@@ -82,6 +98,7 @@ struct ConversationView: View {
     .overlay(alignment: .bottom) {
       if !atBottom {
         Button {
+          stick = true
           withAnimation(.smooth) { scroll.scrollTo(edge: .bottom) }
         } label: {
           Image(systemName: "arrow.down")
@@ -175,7 +192,11 @@ struct ConversationView: View {
           effortLabel: effortLabel(state),
           mode: Binding(get: { state.permissionMode }, set: { m in perform { try await model.update(.init(permissionMode: m)) } }),
           draft: Binding(get: { model.draft }, set: { model.draft = $0 }),
-          onSend: { text, uploads in try await model.send(text, uploads: uploads) },
+          onSend: { text, uploads in
+            stick = true
+            scroll.scrollTo(edge: .bottom)
+            try await model.send(text, uploads: uploads)
+          },
           onStop: { await model.interrupt() }
         ) {
           ModelSheet(

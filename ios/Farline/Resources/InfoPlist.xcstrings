@@ -1,0 +1,65 @@
+{
+  "sourceLanguage": "en",
+  "version": "1.0",
+  "strings": {
+    "NSLocalNetworkUsageDescription": {
+      "comment": "Local network permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farline 需要连接你网络里的 Farline 服务器。"
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "comment": "Microphone permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音输入时 Farline 需要使用麦克风。"
+          }
+        }
+      }
+    },
+    "NSCameraUsageDescription": {
+      "comment": "Camera permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照发送时 Farline 需要使用相机。"
+          }
+        }
+      }
+    },
+    "NSPhotoLibraryUsageDescription": {
+      "comment": "Photo library permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farline 会列出你最近的照片，方便直接发送。"
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "comment": "Speech recognition permission",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farline 会把你说的话转成要发送的文字。"
+          }
+        }
+      }
+    },
+    "CFBundleDisplayName": {
+      "comment": "App name",
+      "shouldTranslate": false
+    }
+  }
+}

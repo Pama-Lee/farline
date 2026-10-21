@@ -1,0 +1,89 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+
+# A newer push supersedes the run before it, so older screenshots never land last.
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+          xcodebuild -version
+      - name: Generate project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Build and test
+        run: |
+          SIM=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in d.items() if "iOS-26" in k for x in v if x["name"].startswith("iPhone")))')
+          set -o pipefail
+          if ! xcodebuild test \
+            -project Farline.xcodeproj \
+            -scheme Farline \
+            -destination "id=$SIM" \
+            CODE_SIGNING_ALLOWED=NO > build.log 2>&1; then
+            echo "::group::Last lines of the log"
+            tail -80 build.log
+            echo "::endgroup::"
+            echo "---- errors ----"
+            grep -E "(error|failed):" build.log | sed -E "s#$PWD/##" | sort -u | head -150
+            # A compiler crash prints no "error:" line, only a stack dump.
+            grep -n -E "Stack dump|Program arguments|signal|While (evaluating|type-checking)|Assertion" -A6 build.log | sed -E "s#$PWD/##" | head -60
+            exit 1
+          fi
+          grep -E "(Test (Suite|Case)|✔|✘|\*\* TEST)" build.log | tail -60
+
+  # Screenshots against a fake server, pushed to the ios-screenshots branch
+  # so they can be linked from the PR.
+  screenshots:
+    runs-on: macos-26
+    needs: build
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+      - name: Build
+        run: |
+          brew install xcodegen
+          xcodegen generate
+          SIM=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; xs=[x for k,v in d.items() if "iOS-26" in k for x in v if x["name"].startswith("iPhone")]; xs.sort(key=lambda x: ("Pro" not in x["name"], "Max" in x["name"], x["name"])); print(xs[0]["udid"])')
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcodebuild build -project Farline.xcodeproj -scheme Farline -destination "id=$SIM" -derivedDataPath build CODE_SIGNING_ALLOWED=NO > build.log 2>&1 || (tail -50 build.log; exit 1)
+      - name: Take screenshots
+        run: Screenshots/take.sh "$SIM" build/Build/Products/Debug-iphonesimulator/Farline.app "$RUNNER_TEMP/shots"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: ${{ runner.temp }}/shots
+      - name: Publish to the ios-screenshots branch
+        env:
+          TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          cd "$RUNNER_TEMP/shots"
+          git init -q
+          git checkout -q -b ios-screenshots
+          git add .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -qm "iOS screenshots for $SHA"
+          git push -qf "https://x-access-token:$TOKEN@github.com/$GITHUB_REPOSITORY" ios-screenshots
